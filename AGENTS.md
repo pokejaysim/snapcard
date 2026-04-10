@@ -1,10 +1,10 @@
-# AGENTS.md — CardList
+# AGENTS.md — SnapCard
 
 Instructions for AI coding agents (Claude Code, Codex, etc.)
 
 ## Project Context
 
-CardList is a SaaS for trading card sellers to list cards on eBay faster.
+SnapCard is a SaaS for trading card sellers to list cards on eBay faster.
 
 **Current Phase:** MVP (manual card ID → eBay listing)
 

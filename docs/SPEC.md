@@ -1,4 +1,4 @@
-# CardList SaaS — Project Spec
+# SnapCard SaaS — Project Spec
 
 **Goal:** Turn our eBay card listing automation into a multi-seller SaaS product.
 

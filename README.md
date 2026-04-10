@@ -1,10 +1,10 @@
-# CardList
+# SnapCard
 
 SaaS platform for trading card sellers — snap a photo, auto-generate listings, publish to eBay.
 
 ## Overview
 
-CardList streamlines the listing process for collectible card sellers:
+SnapCard streamlines the listing process for collectible card sellers:
 
 1. **Upload** card photos (front + back)
 2. **Identify** the card (manual form or auto-detect)
@@ -14,7 +14,7 @@ CardList streamlines the listing process for collectible card sellers:
 ## Project Structure
 
 ```
-cardlist/
+snapcard/
 ├── backend/          # Node.js API (Express + Supabase)
 ├── frontend/         # React + TypeScript + Tailwind
 ├── docs/             # Documentation + specs
