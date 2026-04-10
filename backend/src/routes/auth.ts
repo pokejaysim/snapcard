@@ -49,13 +49,20 @@ router.post("/auth/register", async (req, res) => {
     return;
   }
 
+  // Fetch full user record (including onboarding_complete)
+  const { data: userRecord } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", data.user.id)
+    .single();
+
   // Send welcome email (non-blocking)
   sendWelcomeEmail(email, name ?? null).catch((err) =>
     console.error("Failed to send welcome email:", err)
   );
 
   res.status(201).json({
-    user: { id: data.user.id, email, name: name ?? null },
+    user: userRecord ?? { id: data.user.id, email, name: name ?? null, onboarding_complete: false },
     access_token: session.session?.access_token,
     refresh_token: session.session?.refresh_token,
   });

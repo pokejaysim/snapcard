@@ -1,12 +1,15 @@
 import { Router } from "express";
+import multer from "multer";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import { supabase } from "../lib/supabase.js";
 import { generateTitle } from "../services/titleGenerator.js";
 import { generateDescription } from "../services/descriptionGenerator.js";
 import { schedulePublish } from "../services/ebay/publish.js";
+import { uploadPhoto } from "../services/storage.js";
 import { PLAN_LIMITS, type PlanName } from "../lib/plans.js";
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 // ── Create draft listing ───────────────────────────────
 
@@ -298,6 +301,61 @@ router.post("/listings/:id/generate", requireAuth, async (req, res) => {
 
   res.json(data);
 });
+
+// ── Upload photo for a listing ─────────────────────────
+
+router.post(
+  "/listings/:id/photos",
+  requireAuth,
+  upload.single("photo"),
+  async (req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    const file = req.file;
+    const position = req.body.position as string | undefined;
+
+    if (!file) {
+      res.status(400).json({ error: "No photo uploaded" });
+      return;
+    }
+
+    // Verify the listing belongs to this user
+    const { data: listing } = await supabase
+      .from("listings")
+      .select("id")
+      .eq("id", req.params.id)
+      .eq("user_id", authReq.userId)
+      .single();
+
+    if (!listing) {
+      res.status(404).json({ error: "Listing not found" });
+      return;
+    }
+
+    try {
+      const { url } = await uploadPhoto(file.buffer, `listings/${req.params.id}`);
+
+      const { data: photo, error } = await supabase
+        .from("photos")
+        .insert({
+          listing_id: req.params.id,
+          file_url: url,
+          position: Number(position ?? 1),
+        })
+        .select()
+        .single();
+
+      if (error) {
+        res.status(500).json({ error: "Failed to save photo record", code: "DB_ERROR" });
+        return;
+      }
+
+      res.status(201).json(photo);
+    } catch (err) {
+      console.error("Photo upload failed:", err);
+      res.status(500).json({ error: "Photo upload failed", code: "UPLOAD_ERROR" });
+    }
+  }
+);
 
 // ── Get photos for a listing ───────────────────────────
 
