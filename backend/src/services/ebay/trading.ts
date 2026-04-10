@@ -1,4 +1,5 @@
 import { XMLBuilder, XMLParser } from "fast-xml-parser";
+import { getEbayUrls } from "./config.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -79,7 +80,9 @@ export async function ebayTradingApi(
 
   const siteId = process.env.EBAY_SITE_ID ?? "2"; // 2 = Canada
 
-  const response = await fetch("https://api.ebay.com/ws/api.dll", {
+  const { apiBase } = getEbayUrls();
+
+  const response = await fetch(`${apiBase}/ws/api.dll`, {
     method: "POST",
     headers: {
       "Content-Type": "text/xml",

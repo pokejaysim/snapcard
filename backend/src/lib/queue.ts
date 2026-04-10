@@ -3,13 +3,15 @@ import Bull from "bull";
 // ---------------------------------------------------------------------------
 // Bull queue for async listing publish jobs
 //
-// Requires Redis. Connects to REDIS_URL env var or localhost default.
-// Install: npm install bull @types/bull
+// If REDIS_URL is set: uses real Bull queue with Redis.
+// If not set (and not in mock mode): exports null, and publish.ts
+// will call processPublishJob() synchronously instead.
+// Mock mode bypasses the queue entirely in the route handler.
 // ---------------------------------------------------------------------------
 
-const redisUrl = process.env.REDIS_URL ?? "redis://localhost:6379";
+const redisUrl = process.env.REDIS_URL;
 
-export const publishQueue = new Bull<{ listingId: string }>(
-  "publish-listing",
-  redisUrl,
-);
+export const publishQueue: Bull.Queue<{ listingId: string }> | null =
+  redisUrl
+    ? new Bull<{ listingId: string }>("publish-listing", redisUrl)
+    : null;

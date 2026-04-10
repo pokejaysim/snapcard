@@ -2,6 +2,8 @@ import { supabase } from "../../lib/supabase.js";
 import { publishQueue } from "../../lib/queue.js";
 import { verifyAddItem } from "./trading.js";
 import type { ListingData } from "./trading.js";
+import { getValidEbayToken } from "./tokenManager.js";
+import { isMockMode } from "./config.js";
 
 // ---------------------------------------------------------------------------
 // Types for DB rows (minimal shape needed here)
@@ -17,12 +19,6 @@ interface ListingRow {
   listing_type: "auction" | "fixed_price";
   duration: number;
   status: string;
-}
-
-interface EbayAccountRow {
-  id: string;
-  user_id: string;
-  ebay_token: string;
 }
 
 interface PhotoRow {
@@ -81,7 +77,7 @@ export async function schedulePublish(
   // 2. Verify the user has a linked eBay account
   const { data: ebayAccount, error: ebayErr } = await supabase
     .from("ebay_accounts")
-    .select("*")
+    .select("id")
     .eq("user_id", userId)
     .single();
 
@@ -92,9 +88,10 @@ export async function schedulePublish(
     };
   }
 
-  const account = ebayAccount as unknown as EbayAccountRow;
+  // 3. Get a valid token (refreshes if needed)
+  const token = await getValidEbayToken(userId);
 
-  // 3. Fetch photo URLs for the listing
+  // 4. Fetch photo URLs for the listing
   const { data: photos } = await supabase
     .from("photos")
     .select("*")
@@ -106,7 +103,7 @@ export async function schedulePublish(
     .map((p) => p.ebay_url ?? p.file_url)
     .filter((url): url is string => url != null);
 
-  // 4. Run VerifyAddItem as a dry-run validation
+  // 5. Run VerifyAddItem as a dry-run validation
   const listingData: ListingData = {
     title: listingRow.title,
     description: listingRow.description,
@@ -118,7 +115,7 @@ export async function schedulePublish(
   };
 
   try {
-    const { warnings } = await verifyAddItem(listingData, account.ebay_token);
+    const { warnings } = await verifyAddItem(listingData, token);
 
     // Log warnings but don't block on them
     if (warnings.length > 0) {
@@ -136,7 +133,7 @@ export async function schedulePublish(
     };
   }
 
-  // 5. Update listing status to "scheduled" and enqueue the publish job
+  // 6. Update listing status to "scheduled"
   const { error: updateErr } = await supabase
     .from("listings")
     .update({ status: "scheduled" })
@@ -149,17 +146,23 @@ export async function schedulePublish(
     };
   }
 
-  // Enqueue to Bull with 5-hour delay (eBay scheduling buffer)
-  const PUBLISH_DELAY_MS = 5 * 60 * 60 * 1000; // 5 hours
-  await publishQueue.add(
-    { listingId },
-    {
-      delay: PUBLISH_DELAY_MS,
-      attempts: 3,
-      backoff: { type: "exponential", delay: 60_000 },
-      removeOnComplete: true,
-    },
-  );
+  // 7. Enqueue (or run synchronously if no Redis)
+  if (publishQueue) {
+    const PUBLISH_DELAY_MS = 5 * 60 * 60 * 1000; // 5 hours
+    await publishQueue.add(
+      { listingId },
+      {
+        delay: PUBLISH_DELAY_MS,
+        attempts: 3,
+        backoff: { type: "exponential", delay: 60_000 },
+        removeOnComplete: true,
+      },
+    );
+  } else {
+    // No Redis — run synchronously
+    const { processPublishJob } = await import("../../jobs/publishListing.js");
+    await processPublishJob({ listingId });
+  }
 
   return { scheduled: true };
 }
