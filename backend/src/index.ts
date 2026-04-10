@@ -32,64 +32,68 @@ app.use("/api", accountRouter);
 app.use(errorHandler);
 
 // ── Register Bull queue processor ─────────────────────────
-publishQueue.process(async (job) => {
-  console.log(`[Queue] Processing publish job for listing ${job.data.listingId}`);
-  await processPublishJob(job.data);
-});
+if (publishQueue) {
+  publishQueue.process(async (job) => {
+    console.log(`[Queue] Processing publish job for listing ${job.data.listingId}`);
+    await processPublishJob(job.data);
+  });
 
-publishQueue.on("completed", async (job) => {
-  console.log(`[Queue] Listing ${job.data.listingId} published successfully`);
+  publishQueue.on("completed", async (job) => {
+    console.log(`[Queue] Listing ${job.data.listingId} published successfully`);
 
-  // Send success email
-  try {
-    const { data: listing } = await import("./lib/supabase.js").then((m) =>
-      m.supabase
-        .from("listings")
-        .select("card_name, ebay_item_id, user_id")
-        .eq("id", job.data.listingId)
-        .single(),
-    );
-    if (listing) {
-      const { data: user } = await import("./lib/supabase.js").then((m) =>
-        m.supabase.from("users").select("email").eq("id", listing.user_id).single(),
+    // Send success email
+    try {
+      const { data: listing } = await import("./lib/supabase.js").then((m) =>
+        m.supabase
+          .from("listings")
+          .select("card_name, ebay_item_id, user_id")
+          .eq("id", job.data.listingId)
+          .single(),
       );
-      if (user?.email) {
-        await sendListingPublishedEmail(
-          user.email,
-          listing.card_name as string,
-          String(listing.ebay_item_id),
+      if (listing) {
+        const { data: user } = await import("./lib/supabase.js").then((m) =>
+          m.supabase.from("users").select("email").eq("id", listing.user_id).single(),
         );
+        if (user?.email) {
+          await sendListingPublishedEmail(
+            user.email,
+            listing.card_name as string,
+            String(listing.ebay_item_id),
+          );
+        }
       }
+    } catch (err) {
+      console.error("[Queue] Failed to send publish success email:", err);
     }
-  } catch (err) {
-    console.error("[Queue] Failed to send publish success email:", err);
-  }
-});
+  });
 
-publishQueue.on("failed", async (job, err) => {
-  console.error(`[Queue] Listing ${job.data.listingId} publish failed:`, err.message);
+  publishQueue.on("failed", async (job, err) => {
+    console.error(`[Queue] Listing ${job.data.listingId} publish failed:`, err.message);
 
-  // Send failure email
-  try {
-    const { data: listing } = await import("./lib/supabase.js").then((m) =>
-      m.supabase
-        .from("listings")
-        .select("card_name, user_id")
-        .eq("id", job.data.listingId)
-        .single(),
-    );
-    if (listing) {
-      const { data: user } = await import("./lib/supabase.js").then((m) =>
-        m.supabase.from("users").select("email").eq("id", listing.user_id).single(),
+    // Send failure email
+    try {
+      const { data: listing } = await import("./lib/supabase.js").then((m) =>
+        m.supabase
+          .from("listings")
+          .select("card_name, user_id")
+          .eq("id", job.data.listingId)
+          .single(),
       );
-      if (user?.email) {
-        await sendListingErrorEmail(user.email, listing.card_name as string, err.message);
+      if (listing) {
+        const { data: user } = await import("./lib/supabase.js").then((m) =>
+          m.supabase.from("users").select("email").eq("id", listing.user_id).single(),
+        );
+        if (user?.email) {
+          await sendListingErrorEmail(user.email, listing.card_name as string, err.message);
+        }
       }
+    } catch (emailErr) {
+      console.error("[Queue] Failed to send publish error email:", emailErr);
     }
-  } catch (emailErr) {
-    console.error("[Queue] Failed to send publish error email:", emailErr);
-  }
-});
+  });
+} else {
+  console.log("[Queue] No REDIS_URL — publish jobs will run synchronously");
+}
 
 app.listen(port, () => {
   console.log(`CardList API running on port ${port}`);

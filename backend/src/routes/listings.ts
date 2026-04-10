@@ -7,6 +7,7 @@ import { generateDescription } from "../services/descriptionGenerator.js";
 import { schedulePublish } from "../services/ebay/publish.js";
 import { uploadPhoto } from "../services/storage.js";
 import { PLAN_LIMITS, type PlanName } from "../lib/plans.js";
+import { isMockMode } from "../services/ebay/config.js";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -393,15 +394,66 @@ router.get("/listings/:id/photos", requireAuth, async (req, res) => {
 
 router.post("/listings/:id/publish", requireAuth, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
+  const listingId = req.params.id as string;
 
-  // Check if eBay integration is configured
-  if (!process.env.EBAY_APP_ID) {
-    res.status(503).json({ error: "eBay integration not configured", code: "EBAY_NOT_CONFIGURED" });
+  // ── Mock mode ────────────────────────────────────────
+  if (isMockMode()) {
+    // Validate ownership + status
+    const { data: listing, error: listingErr } = await supabase
+      .from("listings")
+      .select("*")
+      .eq("id", listingId)
+      .eq("user_id", authReq.userId)
+      .single();
+
+    if (listingErr || !listing) {
+      res.status(404).json({ error: "Listing not found" });
+      return;
+    }
+
+    const row = listing as Record<string, unknown>;
+
+    if (row.status !== "draft" && row.status !== "error") {
+      res.status(400).json({ error: `Listing must be in draft or error status to publish (current: ${String(row.status)})` });
+      return;
+    }
+
+    if (!row.price_cad || Number(row.price_cad) <= 0) {
+      res.status(400).json({ error: "Price must be set before publishing" });
+      return;
+    }
+
+    if (!row.title) {
+      res.status(400).json({ error: "Listing title is missing" });
+      return;
+    }
+
+    // Simulate network delay
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const mockItemId = `MOCK-${Date.now()}`;
+
+    const { data: updated, error: updateErr } = await supabase
+      .from("listings")
+      .update({
+        status: "published",
+        ebay_item_id: mockItemId,
+        published_at: new Date().toISOString(),
+      })
+      .eq("id", listingId)
+      .select()
+      .single();
+
+    if (updateErr) {
+      res.status(500).json({ error: "Failed to update listing", code: "DB_ERROR" });
+      return;
+    }
+
+    res.json({ message: "Listing published (mock)", status: "published", mock: true, listing: updated });
     return;
   }
 
-  const listingId = req.params.id as string;
-
+  // ── Real eBay publish ─────────────────────────────────
   const result = await schedulePublish(listingId, authReq.userId);
 
   if (!result.scheduled) {

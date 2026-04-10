@@ -4,6 +4,7 @@ import {
   addItem,
 } from "../services/ebay/trading.js";
 import type { ListingData } from "../services/ebay/trading.js";
+import { getValidEbayToken } from "../services/ebay/tokenManager.js";
 
 // ---------------------------------------------------------------------------
 // Types for DB rows (minimal shape needed by this job)
@@ -19,12 +20,6 @@ interface ListingRow {
   listing_type: "auction" | "fixed_price";
   duration: number;
   status: string;
-}
-
-interface EbayAccountRow {
-  id: string;
-  user_id: string;
-  ebay_token: string;
 }
 
 interface PhotoRow {
@@ -59,23 +54,9 @@ export async function processPublishJob(jobData: {
 
     const listingRow = listing as unknown as ListingRow;
 
-    // 2. Fetch the user's eBay account for the auth token
-    const { data: ebayAccount, error: ebayErr } = await supabase
-      .from("ebay_accounts")
-      .select("*")
-      .eq("user_id", listingRow.user_id)
-      .single();
+    const token = await getValidEbayToken(listingRow.user_id);
 
-    if (ebayErr || !ebayAccount) {
-      throw new Error(
-        `eBay account not found for user ${listingRow.user_id}: ${ebayErr?.message ?? "no data"}`,
-      );
-    }
-
-    const account = ebayAccount as unknown as EbayAccountRow;
-    const token = account.ebay_token;
-
-    // 3. Fetch photos for this listing
+    // 2. Fetch photos for this listing
     const { data: photos, error: photosErr } = await supabase
       .from("photos")
       .select("*")
@@ -88,7 +69,7 @@ export async function processPublishJob(jobData: {
 
     const photoRows = (photos ?? []) as unknown as PhotoRow[];
 
-    // 4. Upload photos that have file_url but no ebay_url
+    // 3. Upload photos that have file_url but no ebay_url
     for (const photo of photoRows) {
       if (photo.file_url && !photo.ebay_url) {
         const ebayUrl = await uploadSiteHostedPictures(photo.file_url, token);
@@ -109,12 +90,12 @@ export async function processPublishJob(jobData: {
       }
     }
 
-    // 5. Collect all eBay-hosted photo URLs
+    // 4. Collect all eBay-hosted photo URLs
     const ebayPhotoUrls = photoRows
       .map((p) => p.ebay_url)
       .filter((url): url is string => url != null);
 
-    // 6. Build listing data and call AddItem
+    // 5. Build listing data and call AddItem
     const listingData: ListingData = {
       title: listingRow.title,
       description: listingRow.description,
@@ -127,7 +108,7 @@ export async function processPublishJob(jobData: {
 
     const { itemId } = await addItem(listingData, token);
 
-    // 7. Update listing as published
+    // 6. Update listing as published
     const { error: publishErr } = await supabase
       .from("listings")
       .update({

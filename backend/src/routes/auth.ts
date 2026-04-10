@@ -2,6 +2,7 @@ import { Router } from "express";
 import { supabase } from "../lib/supabase.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import { sendWelcomeEmail } from "../services/email.js";
+import { getEbayUrls, isMockMode } from "../services/ebay/config.js";
 
 const router = Router();
 
@@ -113,16 +114,18 @@ router.post("/auth/logout", requireAuth, async (_req, res) => {
 // ── eBay OAuth: Get consent URL ────────────────────────
 
 router.get("/auth/ebay-oauth-url", requireAuth, (_req, res) => {
-  const appId = process.env.EBAY_APP_ID;
-  const redirectUri = process.env.EBAY_REDIRECT_URI;
-
-  if (!appId || !redirectUri) {
-    res.status(500).json({ error: "eBay OAuth not configured", code: "CONFIG_ERROR" });
+  // Mock mode: return a fake callback URL pointing to the frontend
+  if (isMockMode()) {
+    const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:5173";
+    res.json({ url: `${frontendUrl}/auth/ebay-callback?code=MOCK_CODE_12345`, mock: true });
     return;
   }
 
-  // eBay OAuth2 authorization endpoint (production)
-  const ebayAuthUrl = new URL("https://auth.ebay.com/oauth2/authorize");
+  const appId = process.env.EBAY_APP_ID!;
+  const redirectUri = process.env.EBAY_REDIRECT_URI!;
+  const { authBase } = getEbayUrls();
+
+  const ebayAuthUrl = new URL(`${authBase}/oauth2/authorize`);
   ebayAuthUrl.searchParams.set("client_id", appId);
   ebayAuthUrl.searchParams.set("response_type", "code");
   ebayAuthUrl.searchParams.set("redirect_uri", redirectUri);
@@ -145,19 +148,44 @@ router.post("/auth/ebay-callback", requireAuth, async (req, res) => {
     return;
   }
 
-  const appId = process.env.EBAY_APP_ID;
-  const certId = process.env.EBAY_CERT_ID;
-  const redirectUri = process.env.EBAY_REDIRECT_URI;
+  // Mock mode: skip real token exchange
+  if (code.startsWith("MOCK_")) {
+    const farFuture = new Date("2099-12-31T23:59:59Z").toISOString();
 
-  if (!appId || !certId || !redirectUri) {
-    res.status(500).json({ error: "eBay OAuth not configured", code: "CONFIG_ERROR" });
+    const { error } = await supabase
+      .from("ebay_accounts")
+      .upsert(
+        {
+          user_id: authReq.userId,
+          ebay_token: `mock-token-${Date.now()}`,
+          ebay_user_id: "mock-seller",
+          site_id: Number(process.env.EBAY_SITE_ID ?? 2),
+          refresh_token: "mock-refresh-token",
+          token_expires_at: farFuture,
+          refreshed_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" }
+      );
+
+    if (error) {
+      console.error("Failed to store mock eBay account:", error);
+      res.status(500).json({ error: "Failed to save eBay account", code: "DB_ERROR" });
+      return;
+    }
+
+    res.json({ message: "eBay account linked successfully (mock)", ebay_user_id: "mock-seller", mock: true });
     return;
   }
+
+  const appId = process.env.EBAY_APP_ID!;
+  const certId = process.env.EBAY_CERT_ID!;
+  const redirectUri = process.env.EBAY_REDIRECT_URI!;
+  const { apiBase } = getEbayUrls();
 
   // Exchange auth code for user token
   const credentials = Buffer.from(`${appId}:${certId}`).toString("base64");
 
-  const tokenRes = await fetch("https://api.ebay.com/identity/v1/oauth2/token", {
+  const tokenRes = await fetch(`${apiBase}/identity/v1/oauth2/token`, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -224,6 +252,7 @@ router.post("/auth/ebay-callback", requireAuth, async (req, res) => {
 
 async function fetchEbayUserId(token: string): Promise<string | null> {
   const siteId = process.env.EBAY_SITE_ID ?? "2";
+  const { apiBase } = getEbayUrls();
 
   const xml = `<?xml version="1.0" encoding="utf-8"?>
 <GetUserRequest xmlns="urn:ebay:apis:eBLBaseComponents">
@@ -233,7 +262,7 @@ async function fetchEbayUserId(token: string): Promise<string | null> {
 </GetUserRequest>`;
 
   try {
-    const res = await fetch("https://api.ebay.com/ws/api.dll", {
+    const res = await fetch(`${apiBase}/ws/api.dll`, {
       method: "POST",
       headers: {
         "Content-Type": "text/xml",
