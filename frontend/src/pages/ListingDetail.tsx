@@ -67,6 +67,7 @@ export default function ListingDetail() {
   const [error, setError] = useState("");
 
   const [uploading, setUploading] = useState(false);
+  const [mockPublished, setMockPublished] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Edit form state
@@ -138,7 +139,10 @@ export default function ListingDetail() {
     setPublishing(true);
 
     try {
-      await apiFetch(`/listings/${id}/publish`, { method: "POST" });
+      const result = await apiFetch<{ mock?: boolean }>(`/listings/${id}/publish`, { method: "POST" });
+      if (result.mock) {
+        setMockPublished(true);
+      }
       await queryClient.invalidateQueries({ queryKey: ["listing", id] });
       await queryClient.invalidateQueries({ queryKey: ["listings"] });
     } catch (err) {
@@ -217,6 +221,7 @@ export default function ListingDetail() {
 
   const isDraft = listing.status === "draft";
   const isError = listing.status === "error";
+  const isMockListing = mockPublished || (listing.ebay_item_id != null && String(listing.ebay_item_id).startsWith("MOCK-"));
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
@@ -249,6 +254,12 @@ export default function ListingDetail() {
             <p className="font-medium">eBay Error</p>
             <p>{listing.ebay_error}</p>
           </div>
+        </div>
+      )}
+
+      {isMockListing && listing.status === "published" && (
+        <div className="mb-4 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm text-muted-foreground">
+          Published in mock mode. Connect a real eBay account to publish listings for real.
         </div>
       )}
 
