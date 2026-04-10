@@ -23,7 +23,10 @@ export default function EbayCallback() {
       .then(() => {
         const returnTo = localStorage.getItem("cardlist_ebay_return");
         localStorage.removeItem("cardlist_ebay_return");
-        navigate(returnTo === "onboarding" ? "/onboarding" : "/dashboard", { replace: true });
+        const destination = returnTo === "onboarding" ? "/onboarding"
+          : returnTo === "account" ? "/account"
+          : "/dashboard";
+        navigate(destination, { replace: true });
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : "Failed to link eBay account");
