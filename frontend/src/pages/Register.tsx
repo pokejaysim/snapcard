@@ -51,8 +51,12 @@ export default function Register() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <Card className="w-full max-w-md">
+    <div className="auth-bg flex min-h-screen items-center justify-center px-4">
+      <div className="w-full max-w-md">
+        <h1 className="mb-8 text-center font-heading text-2xl font-bold tracking-tight">
+          <span className="text-primary">Snap</span>Card
+        </h1>
+        <Card className="border-0 shadow-lg">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">Create Account</CardTitle>
           <CardDescription>Start listing cards on eBay faster</CardDescription>
@@ -94,7 +98,7 @@ export default function Register() {
                 minLength={6}
               />
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" size="lg" className="w-full" disabled={loading}>
               {loading ? "Creating account..." : "Sign Up"}
             </Button>
             <p className="text-center text-sm text-muted-foreground">
@@ -106,6 +110,7 @@ export default function Register() {
           </form>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

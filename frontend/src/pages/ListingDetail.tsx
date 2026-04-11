@@ -527,7 +527,7 @@ export default function ListingDetail() {
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <p className="text-muted-foreground">Price</p>
-                  <p className="font-medium">
+                  <p className="font-heading text-xl font-bold">
                     {listing.price_cad ? `$${listing.price_cad} CAD` : "Not set"}
                   </p>
                 </div>

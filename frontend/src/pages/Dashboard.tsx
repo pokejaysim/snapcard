@@ -22,6 +22,9 @@ interface Listing {
   card_name: string;
   set_name: string | null;
   condition: string | null;
+  card_type: "raw" | "graded" | null;
+  grading_company: string | null;
+  grade: string | null;
   status: string;
   title: string | null;
   price_cad: number | null;
@@ -173,17 +176,20 @@ export default function Dashboard() {
         )}
 
       {/* Stats row */}
-      <div className="mt-4 grid grid-cols-4 gap-3">
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          { label: "Drafts", count: drafts.length },
-          { label: "Scheduled", count: scheduled.length },
-          { label: "Published", count: published.length },
-          { label: "Errors", count: errors.length },
+          { label: "Drafts", count: drafts.length, dot: "bg-muted-foreground/40" },
+          { label: "Scheduled", count: scheduled.length, dot: "bg-amber-400" },
+          { label: "Published", count: published.length, dot: "bg-primary" },
+          { label: "Errors", count: errors.length, dot: "bg-destructive" },
         ].map((stat) => (
           <Card key={stat.label}>
             <CardContent className="py-3 text-center">
-              <p className="text-2xl font-bold">{stat.count}</p>
-              <p className="text-xs text-muted-foreground">{stat.label}</p>
+              <p className="font-heading text-3xl font-bold">{stat.count}</p>
+              <div className="mt-1 flex items-center justify-center gap-1.5">
+                <span className={`inline-block size-1.5 rounded-full ${stat.dot}`} />
+                <p className="text-xs text-muted-foreground">{stat.label}</p>
+              </div>
             </CardContent>
           </Card>
         ))}
@@ -192,7 +198,7 @@ export default function Dashboard() {
       {/* New listing button */}
       <div className="mt-6">
         <Link to="/listings/new">
-          <Button className="w-full">
+          <Button size="lg" className="w-full">
             <Plus className="mr-1.5 size-4" />
             New Listing
           </Button>
@@ -200,7 +206,7 @@ export default function Dashboard() {
       </div>
 
       {/* Listings */}
-      <div className="mt-6 space-y-2">
+      <div className="mt-6">
         {isLoading && (
           <div className="flex justify-center py-8">
             <Loader2 className="size-6 animate-spin text-muted-foreground" />
@@ -215,34 +221,43 @@ export default function Dashboard() {
           </Card>
         )}
 
-        {listings?.map((listing) => (
-          <Link
-            key={listing.id}
-            to={`/listings/${listing.id}`}
-            className="block"
-          >
-            <Card className="transition hover:bg-accent/50">
-              <CardContent className="flex items-center justify-between py-3">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{listing.card_name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {listing.set_name ?? "No set"} &middot;{" "}
-                    {listing.condition ?? "—"}
-                    {listing.price_cad && ` · $${listing.price_cad} CAD`}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {listings?.map((listing) => (
+            <Link
+              key={listing.id}
+              to={`/listings/${listing.id}`}
+              className="group block"
+            >
+              <Card className="overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+                {/* Card image placeholder */}
+                <div className="flex aspect-[4/3] items-center justify-center bg-muted">
+                  <span className="font-heading text-3xl font-bold text-muted-foreground/20">
+                    {listing.card_name.charAt(0)}
+                  </span>
+                </div>
+                <CardContent className="p-3">
+                  <p className="truncate font-heading text-sm font-bold">
+                    {listing.card_name}
                   </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant={statusColors[listing.status] ?? "outline"}>
-                    {listing.status}
-                  </Badge>
-                  {listing.ebay_item_id && (
-                    <ExternalLink className="size-4 text-muted-foreground" />
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
+                  <p className="truncate text-xs text-muted-foreground">
+                    {listing.set_name ?? "No set"} ·{" "}
+                    {listing.card_type === "graded"
+                      ? `${listing.grading_company ?? ""} ${listing.grade ?? ""}`.trim() || "Graded"
+                      : listing.condition ?? "—"}
+                  </p>
+                  <div className="mt-2 flex items-center justify-between">
+                    <p className="font-heading text-lg font-bold">
+                      {listing.price_cad ? `$${listing.price_cad}` : "—"}
+                    </p>
+                    <Badge variant={statusColors[listing.status] ?? "outline"}>
+                      {listing.status}
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
       </div>
     </div>
   );

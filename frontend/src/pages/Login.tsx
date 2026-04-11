@@ -53,8 +53,12 @@ export default function Login() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <Card className="w-full max-w-md">
+    <div className="auth-bg flex min-h-screen items-center justify-center px-4">
+      <div className="w-full max-w-md">
+        <h1 className="mb-8 text-center font-heading text-2xl font-bold tracking-tight">
+          <span className="text-primary">Snap</span>Card
+        </h1>
+        <Card className="border-0 shadow-lg">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
           <CardDescription>Log in to SnapCard</CardDescription>
@@ -85,7 +89,7 @@ export default function Login() {
                 required
               />
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" size="lg" className="w-full" disabled={loading}>
               {loading ? "Logging in..." : "Log In"}
             </Button>
             <p className="text-center text-sm text-muted-foreground">
@@ -97,6 +101,7 @@ export default function Login() {
           </form>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }
