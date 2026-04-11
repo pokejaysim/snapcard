@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
+import { DEV_MODE, DEV_PHOTOS } from "@/lib/devMode";
 import {
   ArrowLeft,
   Loader2,
@@ -178,6 +179,19 @@ export default function ListingDetail() {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         if (!file || !file.type.startsWith("image/")) continue;
+
+        if (DEV_MODE) {
+          // In dev mode, create a local preview URL instead of uploading
+          const photoList = DEV_PHOTOS[id] ?? [];
+          photoList.push({
+            id: `photo-dev-${Date.now()}-${i}`,
+            file_url: URL.createObjectURL(file),
+            ebay_url: null,
+            position: currentCount + i,
+          });
+          DEV_PHOTOS[id] = photoList;
+          continue;
+        }
 
         const formData = new FormData();
         formData.append("photo", file);
