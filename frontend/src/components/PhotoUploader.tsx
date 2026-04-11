@@ -11,12 +11,14 @@ interface PhotoUploaderProps {
   photos: PhotoFile[];
   onChange: (photos: PhotoFile[]) => void;
   maxPhotos?: number;
+  labels?: string[];
 }
 
 export function PhotoUploader({
   photos,
   onChange,
   maxPhotos = 4,
+  labels: labelsProp,
 }: PhotoUploaderProps) {
   const [dragOver, setDragOver] = useState(false);
 
@@ -65,7 +67,7 @@ export function PhotoUploader({
     onChange(updated);
   }
 
-  const labels = ["Front", "Back", "Extra 1", "Extra 2"];
+  const labels = labelsProp ?? ["Front", "Back", "Extra 1", "Extra 2"];
 
   return (
     <div className="space-y-4">

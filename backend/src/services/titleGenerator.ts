@@ -5,11 +5,16 @@ interface TitleInput {
   rarity: string | null;
   condition: string | null;
   language: string | null;
+  card_type?: "raw" | "graded" | null;
+  grading_company?: string | null;
+  grade?: string | null;
 }
 
 const MAX_TITLE_LENGTH = 80;
 
 export function generateTitle(input: TitleInput): string {
+  const isGraded = input.card_type === "graded";
+
   // Build parts in priority order for eBay search visibility
   const parts: string[] = [];
 
@@ -23,11 +28,18 @@ export function generateTitle(input: TitleInput): string {
     parts.push(input.set_name);
   }
 
+  // For graded cards: company + grade before rarity
+  if (isGraded) {
+    if (input.grading_company) parts.push(input.grading_company);
+    if (input.grade) parts.push(input.grade);
+  }
+
   if (input.rarity) {
     parts.push(input.rarity);
   }
 
-  if (input.condition) {
+  // Only add condition for raw cards
+  if (!isGraded && input.condition) {
     parts.push(input.condition);
   }
 

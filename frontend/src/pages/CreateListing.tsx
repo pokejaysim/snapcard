@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,10 +32,20 @@ interface CardDetails {
   language: string;
   condition: string;
   card_game: string;
+  card_type: "raw" | "graded";
+  grading_company: string;
+  grade: string;
   confidence?: number;
 }
 
 const CONDITIONS = ["NM", "LP", "MP", "HP", "DMG"] as const;
+const GRADING_COMPANIES = [
+  { key: "PSA", label: "PSA" },
+  { key: "BGS", label: "BGS" },
+  { key: "CGC", label: "CGC" },
+  { key: "SGC", label: "SGC" },
+  { key: "other", label: "Other" },
+] as const;
 const STEPS: { key: Step; label: string }[] = [
   { key: "photos", label: "Photos" },
   { key: "identify", label: "Identify" },
@@ -46,6 +56,7 @@ const STEPS: { key: Step; label: string }[] = [
 
 export default function CreateListing() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>("photos");
   const [photos, setPhotos] = useState<PhotoFile[]>([]);
   const [_identifying, setIdentifying] = useState(false);
@@ -67,6 +78,9 @@ export default function CreateListing() {
     language: "English",
     condition: "NM",
     card_game: "pokemon",
+    card_type: "raw",
+    grading_company: "",
+    grade: "",
   });
 
   const [generatedTitle, setGeneratedTitle] = useState("");
@@ -136,6 +150,9 @@ export default function CreateListing() {
       language: "English",
       condition: "NM",
       card_game: "pokemon",
+      card_type: "raw",
+      grading_company: "",
+      grade: "",
     });
     setStep("details");
   }
@@ -145,7 +162,12 @@ export default function CreateListing() {
   function validateDetails(): string | null {
     if (!card.card_name.trim()) return "Card name is required.";
     if (card.card_name.length > 200) return "Card name is too long (max 200 characters).";
-    if (!card.condition) return "Please select a condition.";
+    if (card.card_type === "graded") {
+      if (!card.grading_company) return "Please select a grading company.";
+      if (!card.grade.trim()) return "Please enter a grade.";
+    } else {
+      if (!card.condition) return "Please select a condition.";
+    }
     if (!card.card_game) return "Please select a card game.";
     return null;
   }
@@ -182,12 +204,20 @@ export default function CreateListing() {
     const parts = [card.card_name];
     if (card.card_number) parts.push(card.card_number);
     if (card.set_name) parts.push(card.set_name);
+    if (card.card_type === "graded") {
+      if (card.grading_company) parts.push(card.grading_company);
+      if (card.grade) parts.push(card.grade);
+    }
     if (card.rarity) parts.push(card.rarity);
-    if (card.condition) parts.push(card.condition);
+    if (card.card_type === "raw" && card.condition) parts.push(card.condition);
     if (card.language && card.language !== "English") parts.push(card.language);
     setGeneratedTitle(parts.join(" ").slice(0, 80));
+
+    const gradeOrCondition = card.card_type === "graded"
+      ? `${card.grading_company} ${card.grade}`
+      : `Condition: ${card.condition ?? "NM"}`;
     setGeneratedDescription(
-      `${card.card_name} — ${card.set_name ?? ""} ${card.card_number ?? ""} — Condition: ${card.condition ?? "NM"}`
+      `${card.card_name} — ${card.set_name ?? ""} ${card.card_number ?? ""} — ${gradeOrCondition}`
     );
     setStep("preview");
   }
@@ -224,8 +254,11 @@ export default function CreateListing() {
           card_number: card.card_number || undefined,
           rarity: card.rarity || undefined,
           language: card.language,
-          condition: card.condition,
+          condition: card.card_type === "raw" ? card.condition : undefined,
           card_game: card.card_game || undefined,
+          card_type: card.card_type,
+          grading_company: card.card_type === "graded" ? card.grading_company || undefined : undefined,
+          grade: card.card_type === "graded" ? card.grade || undefined : undefined,
           identified_by: identifiedBy,
           listing_type: listingType,
           price_cad: price ? parseFloat(price) : undefined,
@@ -244,6 +277,7 @@ export default function CreateListing() {
         }
       }
 
+      await queryClient.invalidateQueries({ queryKey: ["listings"] });
       navigate("/dashboard");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to save listing";
@@ -303,7 +337,15 @@ export default function CreateListing() {
             <CardTitle>Upload Card Photos</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <PhotoUploader photos={photos} onChange={setPhotos} />
+            <PhotoUploader
+              photos={photos}
+              onChange={setPhotos}
+              labels={
+                card.card_type === "graded"
+                  ? ["Front", "Back", "Label/Grade", "Extra"]
+                  : undefined
+              }
+            />
 
             {/* Two-button fork: AI identify vs Manual entry */}
             <div className="flex flex-col gap-3 sm:flex-row">
@@ -386,6 +428,54 @@ export default function CreateListing() {
               </span>
             </div>
 
+            {/* Raw vs Graded toggle */}
+            <div className="space-y-2">
+              <Label>Card Type</Label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCard((prev) => ({
+                      ...prev,
+                      card_type: "raw",
+                      condition: prev.condition || "NM",
+                      grading_company: "",
+                      grade: "",
+                    }));
+                  }}
+                  className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition ${
+                    card.card_type === "raw"
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-input hover:bg-accent"
+                  }`}
+                >
+                  Raw Card
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCard((prev) => ({
+                      ...prev,
+                      card_type: "graded",
+                      condition: "",
+                    }));
+                  }}
+                  className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition ${
+                    card.card_type === "graded"
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-input hover:bg-accent"
+                  }`}
+                >
+                  Graded Card
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {card.card_type === "raw"
+                  ? "Ungraded card with condition rating"
+                  : "PSA, BGS, CGC, or SGC graded with numeric grade"}
+              </p>
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="card_name">Card Name *</Label>
@@ -432,25 +522,60 @@ export default function CreateListing() {
                   onChange={(e) => updateCard("language", e.target.value)}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="condition">Condition</Label>
-                <div className="flex gap-1.5">
-                  {CONDITIONS.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => updateCard("condition", c)}
-                      className={`flex-1 rounded-md border px-2 py-1.5 text-xs font-medium transition ${
-                        card.condition === c
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-input hover:bg-accent"
-                      }`}
-                    >
-                      {c}
-                    </button>
-                  ))}
+
+              {/* Condition (raw) or Grading (graded) */}
+              {card.card_type === "raw" ? (
+                <div className="space-y-2">
+                  <Label>Condition</Label>
+                  <div className="flex gap-1.5">
+                    {CONDITIONS.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => updateCard("condition", c)}
+                        className={`flex-1 rounded-md border px-2 py-1.5 text-xs font-medium transition ${
+                          card.condition === c
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-input hover:bg-accent"
+                        }`}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label>Grading Company *</Label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {GRADING_COMPANIES.map((g) => (
+                        <button
+                          key={g.key}
+                          type="button"
+                          onClick={() => updateCard("grading_company", g.key)}
+                          className={`rounded-md border px-3 py-1.5 text-xs font-medium transition ${
+                            card.grading_company === g.key
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-input hover:bg-accent"
+                          }`}
+                        >
+                          {g.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="grade">Grade *</Label>
+                    <Input
+                      id="grade"
+                      value={card.grade}
+                      onChange={(e) => updateCard("grade", e.target.value)}
+                      placeholder="e.g. 10, 9.5"
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="flex justify-between pt-2">

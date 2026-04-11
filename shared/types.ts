@@ -27,6 +27,8 @@ export type ListingStatus = "draft" | "scheduled" | "published" | "error";
 export type ListingType = "auction" | "fixed_price";
 export type CardCondition = "NM" | "LP" | "MP" | "HP" | "DMG";
 export type CardGame = "pokemon";
+export type CardType = "raw" | "graded";
+export type GradingCompany = "PSA" | "BGS" | "CGC" | "SGC" | "other";
 
 export interface Listing {
   id: string;
@@ -42,6 +44,9 @@ export interface Listing {
   language: string;
   condition: CardCondition | null;
   card_game: CardGame | null;
+  card_type: CardType;
+  grading_company: GradingCompany | null;
+  grade: string | null;
   identified_by: "manual" | "ai";
 
   // Listing details
@@ -108,6 +113,9 @@ export interface CardIdentification {
   language: string;
   condition: CardCondition;
   card_game: CardGame;
+  card_type: CardType;
+  grading_company: GradingCompany | null;
+  grade: string | null;
   confidence: number; // 0-1
 }
 

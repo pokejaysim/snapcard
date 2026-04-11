@@ -5,9 +5,14 @@ interface DescriptionInput {
   rarity: string | null;
   condition: string | null;
   language: string | null;
+  card_type?: "raw" | "graded" | null;
+  grading_company?: string | null;
+  grade?: string | null;
 }
 
 export function generateDescription(input: DescriptionInput): string {
+  const isGraded = input.card_type === "graded";
+
   const conditionDescriptions: Record<string, string> = {
     NM: "Near Mint — Minimal to no wear. Card is in excellent condition.",
     LP: "Light Play — Minor edge or corner wear. No major creases.",
@@ -20,6 +25,28 @@ export function generateDescription(input: DescriptionInput): string {
     ? conditionDescriptions[input.condition] ?? input.condition
     : "See photos for condition";
 
+  // Build the grading or condition rows
+  let gradingRows = "";
+  if (isGraded && input.grading_company) {
+    gradingRows += tableRow("Grading Company", input.grading_company);
+    if (input.grade) {
+      gradingRows += tableRow("Grade", input.grade);
+    }
+  } else if (input.condition) {
+    gradingRows = tableRow("Condition", conditionText);
+  }
+
+  // Shipping info varies by card type
+  const shippingItems = isGraded
+    ? `<li>Graded card ships in original case with protective packaging</li>
+      <li>Bubble mailer or small box for safe delivery</li>
+      <li>Ships from Canada</li>
+      <li>Combined shipping available</li>`
+    : `<li>Cards are shipped in a penny sleeve + top loader</li>
+      <li>Bubble mailer for safe delivery</li>
+      <li>Ships from Canada</li>
+      <li>Combined shipping available</li>`;
+
   return `
 <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 16px;">
   <h2 style="color: #333; margin-bottom: 16px;">${escapeHtml(input.card_name)}</h2>
@@ -31,17 +58,14 @@ export function generateDescription(input: DescriptionInput): string {
       ${input.card_number ? tableRow("Card Number", input.card_number) : ""}
       ${input.rarity ? tableRow("Rarity", input.rarity) : ""}
       ${input.language ? tableRow("Language", input.language) : ""}
-      ${input.condition ? tableRow("Condition", conditionText) : ""}
+      ${gradingRows}
     </tbody>
   </table>
 
   <div style="background: #f8f9fa; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
     <h3 style="margin: 0 0 8px; color: #333;">Shipping</h3>
     <ul style="margin: 0; padding-left: 20px; color: #555;">
-      <li>Cards are shipped in a penny sleeve + top loader</li>
-      <li>Bubble mailer for safe delivery</li>
-      <li>Ships from Canada</li>
-      <li>Combined shipping available</li>
+      ${shippingItems}
     </ul>
   </div>
 

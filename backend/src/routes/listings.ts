@@ -24,6 +24,9 @@ router.post("/listings", requireAuth, async (req, res) => {
     language?: string;
     condition?: string;
     card_game?: string;
+    card_type?: string;
+    grading_company?: string;
+    grade?: string;
     identified_by?: string;
     listing_type?: string;
     duration?: number;
@@ -35,9 +38,22 @@ router.post("/listings", requireAuth, async (req, res) => {
     return;
   }
 
-  if (!body.condition) {
-    res.status(400).json({ error: "condition is required" });
-    return;
+  const isGraded = body.card_type === "graded";
+
+  if (isGraded) {
+    if (!body.grading_company) {
+      res.status(400).json({ error: "grading_company is required for graded cards" });
+      return;
+    }
+    if (!body.grade) {
+      res.status(400).json({ error: "grade is required for graded cards" });
+      return;
+    }
+  } else {
+    if (!body.condition) {
+      res.status(400).json({ error: "condition is required" });
+      return;
+    }
   }
 
   // ── Check monthly listing limit ──────────────────────
@@ -78,6 +94,9 @@ router.post("/listings", requireAuth, async (req, res) => {
     rarity: body.rarity ?? null,
     condition: body.condition ?? null,
     language: body.language ?? null,
+    card_type: isGraded ? "graded" : "raw",
+    grading_company: body.grading_company ?? null,
+    grade: body.grade ?? null,
   });
 
   const description = generateDescription({
@@ -87,6 +106,9 @@ router.post("/listings", requireAuth, async (req, res) => {
     rarity: body.rarity ?? null,
     condition: body.condition ?? null,
     language: body.language ?? null,
+    card_type: isGraded ? "graded" : "raw",
+    grading_company: body.grading_company ?? null,
+    grade: body.grade ?? null,
   });
 
   const { data, error } = await supabase
@@ -103,6 +125,9 @@ router.post("/listings", requireAuth, async (req, res) => {
       title,
       description,
       card_game: body.card_game ?? null,
+      card_type: isGraded ? "graded" : "raw",
+      grading_company: body.grading_company ?? null,
+      grade: body.grade ?? null,
       identified_by: body.identified_by ?? "manual",
       listing_type: body.listing_type ?? "auction",
       duration: body.duration ?? 7,

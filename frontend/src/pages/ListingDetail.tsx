@@ -29,6 +29,9 @@ interface Listing {
   rarity: string | null;
   language: string;
   condition: string | null;
+  card_type: "raw" | "graded" | null;
+  grading_company: string | null;
+  grade: string | null;
   status: string;
   title: string | null;
   description: string | null;
@@ -457,7 +460,12 @@ export default function ListingDetail() {
                 ["Number", listing.card_number],
                 ["Rarity", listing.rarity],
                 ["Language", listing.language],
-                ["Condition", listing.condition],
+                ...(listing.card_type === "graded"
+                  ? [
+                      ["Grading", listing.grading_company],
+                      ["Grade", listing.grade],
+                    ]
+                  : [["Condition", listing.condition]]),
               ].map(
                 ([label, value]) =>
                   value && (

@@ -20,11 +20,14 @@ function devMockResponse<T>(path: string, options?: RequestInit): T | null {
   if (path === "/listings" && method === "POST") {
     const body = JSON.parse((options?.body as string) ?? "{}");
     const id = `dev-new-${++devListingCounter}`;
+    const isGraded = body.card_type === "graded";
     const parts = [body.card_name];
     if (body.card_number) parts.push(body.card_number);
     if (body.set_name) parts.push(body.set_name);
+    if (isGraded && body.grading_company) parts.push(body.grading_company);
+    if (isGraded && body.grade) parts.push(body.grade);
     if (body.rarity) parts.push(body.rarity);
-    if (body.condition) parts.push(body.condition);
+    if (!isGraded && body.condition) parts.push(body.condition);
 
     const newListing = {
       id,
@@ -33,8 +36,11 @@ function devMockResponse<T>(path: string, options?: RequestInit): T | null {
       card_number: body.card_number ?? null,
       rarity: body.rarity ?? null,
       language: body.language ?? "English",
-      condition: body.condition ?? "NM",
+      condition: isGraded ? null : (body.condition ?? "NM"),
       card_game: body.card_game ?? "pokemon",
+      card_type: body.card_type ?? "raw",
+      grading_company: body.grading_company ?? null,
+      grade: body.grade ?? null,
       status: "draft",
       title: parts.join(" ").slice(0, 80),
       description: null,
@@ -56,7 +62,8 @@ function devMockResponse<T>(path: string, options?: RequestInit): T | null {
   const listingMatch = path.match(/^\/listings\/([\w-]+)$/);
   if (listingMatch && method === "GET") {
     const listing = DEV_LISTINGS.find((l) => l.id === listingMatch[1]);
-    return (listing ?? null) as unknown as T;
+    if (!listing) throw new Error("Listing not found");
+    return listing as unknown as T;
   }
 
   // PUT /listings/:id
