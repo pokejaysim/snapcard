@@ -152,4 +152,66 @@ router.get("/account/ebay-status", requireAuth, async (req, res) => {
   });
 });
 
+// ── Marketplace Account Deletion Notification ─────────
+// Required by eBay for production keyset approval.
+// eBay calls this webhook when a user requests account deletion.
+
+router.post("/marketplace-account-deletion", async (req, res) => {
+  const notification = req.body as {
+    metadata?: { topic?: string };
+    notification?: { data?: { username?: string; userId?: string; eiasToken?: string } };
+  };
+
+  const ebayUserId = notification?.notification?.data?.username
+    || notification?.notification?.data?.userId;
+
+  if (ebayUserId) {
+    const { error } = await supabase
+      .from("ebay_accounts")
+      .delete()
+      .eq("ebay_user_id", ebayUserId);
+
+    if (error) {
+      console.error("[eBay] Failed to delete account for user:", ebayUserId, error);
+    } else {
+      console.log("[eBay] Deleted account data for user:", ebayUserId);
+    }
+  }
+
+  // Always respond 200 to acknowledge receipt
+  res.status(200).json({ status: "ok" });
+});
+
+// ── Disconnect eBay account ───────────────────────────
+
+router.delete("/account/ebay", requireAuth, async (req, res) => {
+  const authReq = req as AuthenticatedRequest;
+
+  // Check for any listings currently scheduled
+  const { count: scheduledCount } = await supabase
+    .from("listings")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", authReq.userId)
+    .eq("status", "scheduled");
+
+  if (scheduledCount && scheduledCount > 0) {
+    res.status(400).json({
+      error: `You have ${scheduledCount} listing(s) scheduled to publish. Wait for them to complete or cancel them before disconnecting eBay.`,
+    });
+    return;
+  }
+
+  const { error } = await supabase
+    .from("ebay_accounts")
+    .delete()
+    .eq("user_id", authReq.userId);
+
+  if (error) {
+    res.status(500).json({ error: "Failed to disconnect eBay account", code: "DB_ERROR" });
+    return;
+  }
+
+  res.json({ unlinked: true });
+});
+
 export default router;

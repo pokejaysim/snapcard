@@ -18,6 +18,7 @@ import {
   X,
   ImageIcon,
   Upload,
+  Link,
 } from "lucide-react";
 import { useState, useRef } from "react";
 
@@ -87,6 +88,11 @@ export default function ListingDetail() {
     queryKey: ["listing-photos", id],
     queryFn: () => apiFetch<Photo[]>(`/listings/${id}/photos`),
     enabled: !!id,
+  });
+
+  const { data: ebayStatus } = useQuery({
+    queryKey: ["ebay-status"],
+    queryFn: () => apiFetch<{ linked: boolean; ebay_user_id?: string; mock?: boolean }>("/account/ebay-status"),
   });
 
   function startEditing() {
@@ -167,6 +173,17 @@ export default function ListingDetail() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete");
       setDeleting(false);
+    }
+  }
+
+  async function handleConnectEbay() {
+    try {
+      const { url } = await apiFetch<{ url: string }>("/auth/ebay-oauth-url");
+      localStorage.setItem("snapcard_ebay_return", "listing");
+      localStorage.setItem("snapcard_ebay_listing_id", id ?? "");
+      window.location.href = url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to get eBay authorization URL");
     }
   }
 
@@ -560,11 +577,33 @@ export default function ListingDetail() {
         </CardContent>
       </Card>
 
+      {/* eBay Connection Prompt */}
+      {(isDraft || isError) && !editing && ebayStatus && !ebayStatus.linked && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+          <div className="flex items-start gap-3">
+            <Link className="mt-0.5 size-5 text-amber-600" />
+            <div className="flex-1">
+              <p className="font-medium text-amber-900">Connect your eBay account to publish</p>
+              <p className="mt-1 text-sm text-amber-700">
+                SnapCard needs access to your eBay seller account to create listings on your behalf.
+              </p>
+              <Button size="sm" className="mt-3" onClick={handleConnectEbay}>
+                Connect eBay Account
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="flex gap-2">
         {isDraft && !editing && (
           <>
-            <Button onClick={handlePublish} disabled={publishing} className="flex-1">
+            <Button
+              onClick={handlePublish}
+              disabled={publishing || !ebayStatus?.linked}
+              className="flex-1"
+            >
               {publishing ? (
                 <Loader2 className="mr-1.5 size-4 animate-spin" />
               ) : (
@@ -587,13 +626,24 @@ export default function ListingDetail() {
           </>
         )}
         {listing.status === "scheduled" && (
-          <p className="text-sm text-muted-foreground">
-            This listing is scheduled for publish. It will appear on eBay within 5 hours.
-          </p>
+          <div className="rounded-lg border bg-muted/50 p-4 text-sm">
+            <div className="flex items-center gap-2 font-medium">
+              <Loader2 className="size-4 animate-spin text-primary" />
+              Scheduled for publishing
+            </div>
+            <p className="mt-1 text-muted-foreground">
+              Your listing will appear on eBay within 5 hours. This buffer gives you time to cancel or edit before it goes live.
+            </p>
+          </div>
         )}
         {isError && (
           <>
-            <Button onClick={handlePublish} disabled={publishing} variant="outline" className="flex-1">
+            <Button
+              onClick={handlePublish}
+              disabled={publishing || !ebayStatus?.linked}
+              variant="outline"
+              className="flex-1"
+            >
               {publishing ? (
                 <Loader2 className="mr-1.5 size-4 animate-spin" />
               ) : (
