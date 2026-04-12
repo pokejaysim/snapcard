@@ -13,11 +13,11 @@ export const DEV_USER = {
 export const DEV_USAGE = {
   plan: "free" as const,
   listings_this_month: 3,
-  listings_limit: 10,
+  listings_limit: null,
   total_listings: 7,
   published_listings: 2,
-  ai_identify: false,
-  pricing_suggestions: false,
+  ai_identify: true,
+  pricing_suggestions: true,
   card_search: true,
 };
 

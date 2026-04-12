@@ -11,9 +11,9 @@ export type PlanName = "free" | "pro" | "enterprise";
 
 export const PLAN_LIMITS: Record<PlanName, PlanConfig> = {
   free: {
-    monthly_listings: 10,
-    ai_identify: false,
-    pricing_suggestions: false,
+    monthly_listings: Infinity,
+    ai_identify: true,
+    pricing_suggestions: true,
   },
   pro: {
     monthly_listings: Infinity,

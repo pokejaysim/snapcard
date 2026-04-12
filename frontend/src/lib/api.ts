@@ -145,14 +145,32 @@ function devMockResponse<T>(path: string, options?: RequestInit): T | null {
     return detail as unknown as T;
   }
 
-  // POST /cards/identify (blocked for free)
-  if (path === "/cards/identify") {
-    throw new Error("Upgrade to Pro to use AI card identification");
+  // POST /cards/identify (AI vision mock)
+  if (path === "/cards/identify" && method === "POST") {
+    return {
+      card_name: "Charizard",
+      set_name: "Base Set",
+      card_number: "4/102",
+      rarity: "Holo Rare",
+      language: "English",
+      condition: "NM",
+      card_game: "pokemon",
+      card_type: "raw",
+      grading_company: null,
+      grade: null,
+      confidence: 0.95,
+    } as unknown as T;
   }
 
-  // POST /pricing/suggest (blocked for free)
-  if (path === "/pricing/suggest") {
-    throw new Error("Upgrade to Pro to use pricing suggestions");
+  // POST /pricing/suggest (pricing mock)
+  if (path === "/pricing/suggest" && method === "POST") {
+    return {
+      suggested_price_cad: 250.0,
+      pricechart_price: 240.0,
+      ebay_avg_price: 260.0,
+      ebay_comps: [],
+      reasoning: "Based on recent market data (dev mode)",
+    } as unknown as T;
   }
 
   return null;
