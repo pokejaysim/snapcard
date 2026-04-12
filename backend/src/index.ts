@@ -6,6 +6,7 @@ import authRouter from "./routes/auth.js";
 import listingsRouter from "./routes/listings.js";
 import photosRouter from "./routes/photos.js";
 import cardsRouter from "./routes/cards.js";
+import cardSearchRouter from "./routes/cardSearch.js";
 import pricingRouter from "./routes/pricing.js";
 import accountRouter from "./routes/account.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -25,6 +26,7 @@ app.use("/api", authRouter);
 app.use("/api", listingsRouter);
 app.use("/api", photosRouter);
 app.use("/api", cardsRouter);
+app.use("/api", cardSearchRouter);
 app.use("/api", pricingRouter);
 app.use("/api", accountRouter);
 

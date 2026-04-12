@@ -117,6 +117,34 @@ function devMockResponse<T>(path: string, options?: RequestInit): T | null {
     return { id: "dev", email: "demo@snapcard.dev", name: "Demo User", plan: "free" } as unknown as T;
   }
 
+  // GET /cards/search?q=...
+  if (path.startsWith("/cards/search") && method === "GET") {
+    const url = new URL(path, "http://localhost");
+    const q = (url.searchParams.get("q") ?? "").toLowerCase();
+    const mockCards = [
+      { id: "base1-4", name: "Charizard", set_name: "Base", set_series: "Base", number: "4/102", rarity: "Holo Rare", image_small: "https://images.pokemontcg.io/base1/4.png", image_large: "https://images.pokemontcg.io/base1/4_hires.png" },
+      { id: "swsh4-25", name: "Charizard VMAX", set_name: "Vivid Voltage", set_series: "Sword & Shield", number: "25/185", rarity: "VMAX", image_small: "https://images.pokemontcg.io/swsh4/25.png", image_large: "https://images.pokemontcg.io/swsh4/25_hires.png" },
+      { id: "base1-2", name: "Blastoise", set_name: "Base", set_series: "Base", number: "2/102", rarity: "Holo Rare", image_small: "https://images.pokemontcg.io/base1/2.png", image_large: "https://images.pokemontcg.io/base1/2_hires.png" },
+      { id: "base1-25", name: "Pikachu", set_name: "Base", set_series: "Base", number: "25/102", rarity: "Common", image_small: "https://images.pokemontcg.io/base1/25.png", image_large: "https://images.pokemontcg.io/base1/25_hires.png" },
+      { id: "sv3pt5-151", name: "Mewtwo ex", set_name: "Pokemon 151", set_series: "Scarlet & Violet", number: "151/165", rarity: "Ultra Rare", image_small: "https://images.pokemontcg.io/sv3pt5/151.png", image_large: "https://images.pokemontcg.io/sv3pt5/151_hires.png" },
+    ];
+    const filtered = q ? mockCards.filter((c) => c.name.toLowerCase().includes(q)) : mockCards;
+    return { cards: filtered, totalCount: filtered.length, page: 1, pageSize: 10 } as unknown as T;
+  }
+
+  // GET /cards/pokemon-tcg/:id
+  const tcgMatch = path.match(/^\/cards\/pokemon-tcg\/([\w-]+)$/);
+  if (tcgMatch && method === "GET") {
+    const mockDetails: Record<string, unknown> = {
+      "base1-4": { id: "base1-4", name: "Charizard", set_name: "Base", set_series: "Base", number: "4/102", rarity: "Holo Rare", image_small: "https://images.pokemontcg.io/base1/4.png", image_large: "https://images.pokemontcg.io/base1/4_hires.png", supertype: "Pokémon", subtypes: ["Stage 2"], tcgplayer_url: null, tcgplayer_prices: { variant: "holofoil", low: 120, mid: 200, high: 450, market: 250 } },
+      "base1-2": { id: "base1-2", name: "Blastoise", set_name: "Base", set_series: "Base", number: "2/102", rarity: "Holo Rare", image_small: "https://images.pokemontcg.io/base1/2.png", image_large: "https://images.pokemontcg.io/base1/2_hires.png", supertype: "Pokémon", subtypes: ["Stage 2"], tcgplayer_url: null, tcgplayer_prices: { variant: "holofoil", low: 40, mid: 65, high: 120, market: 70 } },
+      "base1-25": { id: "base1-25", name: "Pikachu", set_name: "Base", set_series: "Base", number: "25/102", rarity: "Common", image_small: "https://images.pokemontcg.io/base1/25.png", image_large: "https://images.pokemontcg.io/base1/25_hires.png", supertype: "Pokémon", subtypes: ["Basic"], tcgplayer_url: null, tcgplayer_prices: { variant: "normal", low: 5, mid: 10, high: 25, market: 12 } },
+    };
+    const detail = mockDetails[tcgMatch[1]];
+    if (!detail) throw new Error("Card not found");
+    return detail as unknown as T;
+  }
+
   // POST /cards/identify (blocked for free)
   if (path === "/cards/identify") {
     throw new Error("Upgrade to Pro to use AI card identification");

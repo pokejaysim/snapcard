@@ -18,6 +18,7 @@ export const DEV_USAGE = {
   published_listings: 2,
   ai_identify: false,
   pricing_suggestions: false,
+  card_search: true,
 };
 
 // Full listing shape used by both Dashboard and ListingDetail

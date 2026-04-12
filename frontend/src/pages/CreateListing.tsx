@@ -11,6 +11,7 @@ import { PhotoUploader, type PhotoFile } from "@/components/PhotoUploader";
 import { PricingSuggestion } from "@/components/PricingSuggestion";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { apiFetch, apiUpload } from "@/lib/api";
+import { CardSearch } from "@/components/CardSearch";
 import {
   ArrowLeft,
   ArrowRight,
@@ -19,10 +20,12 @@ import {
   Save,
   PenLine,
   Lock,
+  Search,
 } from "lucide-react";
+import type { PokemonTcgCardDetail } from "../../../shared/types";
 import type { UsageInfo } from "../../../shared/types";
 
-type Step = "photos" | "identify" | "details" | "pricing" | "preview";
+type Step = "photos" | "search" | "identify" | "details" | "pricing" | "preview";
 
 interface CardDetails {
   card_name: string;
@@ -48,7 +51,7 @@ const GRADING_COMPANIES = [
 ] as const;
 const STEPS: { key: Step; label: string }[] = [
   { key: "photos", label: "Photos" },
-  { key: "identify", label: "Identify" },
+  { key: "search", label: "Find Card" },
   { key: "details", label: "Details" },
   { key: "pricing", label: "Pricing" },
   { key: "preview", label: "Preview" },
@@ -62,8 +65,9 @@ export default function CreateListing() {
   const [_identifying, setIdentifying] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [identifiedBy, setIdentifiedBy] = useState<"manual" | "ai">("manual");
+  const [identifiedBy, setIdentifiedBy] = useState<"manual" | "ai" | "pokemon_tcg">("manual");
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [referenceImageUrl, setReferenceImageUrl] = useState<string | null>(null);
 
   const { data: usage } = useQuery({
     queryKey: ["usage"],
@@ -350,41 +354,98 @@ export default function CreateListing() {
               }
             />
 
-            {/* Two-button fork: AI identify vs Manual entry */}
-            <div className="flex flex-col gap-3 sm:flex-row">
-              {usage?.ai_identify ? (
-                <Button
-                  onClick={() => {
-                    setStep("identify");
-                    handleIdentify();
-                  }}
-                  disabled={photos.length === 0}
-                  className="flex-1"
-                >
-                  Auto-Identify with AI
-                  <Sparkles className="ml-1.5 size-4" />
-                </Button>
-              ) : (
+            {/* Three-option fork: Search / AI identify / Manual entry */}
+            <div className="flex flex-col gap-3">
+              <Button
+                onClick={() => setStep("search")}
+                className="w-full"
+                size="lg"
+              >
+                Search by Card Name
+                <Search className="ml-1.5 size-4" />
+              </Button>
+
+              <div className="flex gap-3">
+                {usage?.ai_identify ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setStep("identify");
+                      handleIdentify();
+                    }}
+                    disabled={photos.length === 0}
+                    className="flex-1"
+                  >
+                    Auto-Identify with AI
+                    <Sparkles className="ml-1.5 size-4" />
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    disabled
+                    className="relative flex-1 opacity-60"
+                    onClick={() => setShowUpgrade(true)}
+                  >
+                    Auto-Identify with AI
+                    <Lock className="ml-1.5 size-4" />
+                    <Badge className="absolute -right-2 -top-2 text-[10px]">
+                      Pro
+                    </Badge>
+                  </Button>
+                )}
+
                 <Button
                   variant="outline"
-                  disabled
-                  className="relative flex-1 opacity-60"
-                  onClick={() => setShowUpgrade(true)}
+                  onClick={handleManualEntry}
+                  className="flex-1"
                 >
-                  Auto-Identify with AI
-                  <Lock className="ml-1.5 size-4" />
-                  <Badge className="absolute -right-2 -top-2 text-[10px]">
-                    Pro
-                  </Badge>
+                  Enter Manually
+                  <PenLine className="ml-1.5 size-4" />
                 </Button>
-              )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-              <Button
-                variant="outline"
-                onClick={handleManualEntry}
-                className="flex-1"
-              >
-                Enter Details Manually
+      {/* ── Step 2a: Card Search ─────────────────────── */}
+      {step === "search" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Find Your Card</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <CardSearch
+              onSelect={(detail: PokemonTcgCardDetail) => {
+                setCard({
+                  card_name: detail.name,
+                  set_name: detail.set_name,
+                  card_number: detail.number,
+                  rarity: detail.rarity ?? "",
+                  language: "English",
+                  condition: "NM",
+                  card_game: "pokemon",
+                  card_type: "raw",
+                  grading_company: "",
+                  grade: "",
+                });
+                setIdentifiedBy("pokemon_tcg");
+                setReferenceImageUrl(detail.image_large);
+                setStep("details");
+              }}
+            />
+
+            <p className="text-xs text-muted-foreground">
+              Search the Pokemon TCG database to auto-fill card details. You'll still set condition and pricing yourself.
+            </p>
+
+            <div className="flex justify-between pt-2">
+              <Button variant="outline" onClick={() => setStep("photos")}>
+                <ArrowLeft className="mr-1.5 size-4" />
+                Back
+              </Button>
+              <Button variant="outline" onClick={handleManualEntry}>
+                Skip — Enter Manually
                 <PenLine className="ml-1.5 size-4" />
               </Button>
             </div>
@@ -392,7 +453,7 @@ export default function CreateListing() {
         </Card>
       )}
 
-      {/* ── Step 2: Identifying ─────────────────────── */}
+      {/* ── Step 2b: Identifying ─────────────────────── */}
       {step === "identify" && (
         <Card>
           <CardContent className="flex flex-col items-center gap-4 py-12">
@@ -423,6 +484,21 @@ export default function CreateListing() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Reference image from Pokemon TCG search */}
+            {referenceImageUrl && identifiedBy === "pokemon_tcg" && (
+              <div className="flex items-start gap-3 rounded-lg border border-primary/20 bg-accent p-3">
+                <img
+                  src={referenceImageUrl}
+                  alt="Reference"
+                  className="h-24 w-auto shrink-0 rounded"
+                />
+                <div className="min-w-0 text-xs text-muted-foreground">
+                  <p className="font-medium text-foreground">Reference image from Pokemon TCG database</p>
+                  <p className="mt-1">This is a stock image for reference only. Use your own photos for the eBay listing.</p>
+                </div>
+              </div>
+            )}
+
             {/* Card Game — Pokemon only for now */}
             <div className="flex items-center gap-2 rounded-md bg-muted px-3 py-2">
               <Badge variant="secondary">Pokemon</Badge>

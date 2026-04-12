@@ -47,7 +47,7 @@ export interface Listing {
   card_type: CardType;
   grading_company: GradingCompany | null;
   grade: string | null;
-  identified_by: "manual" | "ai";
+  identified_by: "manual" | "ai" | "pokemon_tcg";
 
   // Listing details
   title: string | null;
@@ -131,6 +131,35 @@ export interface UsageInfo {
   published_listings: number;
   ai_identify: boolean;
   pricing_suggestions: boolean;
+  card_search: boolean;
+}
+
+// ── API Responses ──────────────────────────────────────
+
+// ── Pokemon TCG API ──────────────────────────────────
+
+export interface PokemonTcgSearchResult {
+  id: string;
+  name: string;
+  set_name: string;
+  set_series: string;
+  number: string;
+  rarity: string | null;
+  image_small: string;
+  image_large: string;
+}
+
+export interface PokemonTcgCardDetail extends PokemonTcgSearchResult {
+  supertype: string;
+  subtypes: string[];
+  tcgplayer_url: string | null;
+  tcgplayer_prices: {
+    variant: string;
+    low: number | null;
+    mid: number | null;
+    high: number | null;
+    market: number | null;
+  } | null;
 }
 
 // ── API Responses ──────────────────────────────────────
