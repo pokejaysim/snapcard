@@ -1,5 +1,5 @@
 import { XMLBuilder, XMLParser } from "fast-xml-parser";
-import { getEbayUrls } from "./config.js";
+import { getEbayUrls, getEbayMarketplaceConfig } from "./config.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -71,6 +71,7 @@ export async function ebayTradingApi(
   callName: string,
   requestBody: Record<string, unknown>,
   token: string,
+  marketplaceId?: string,
 ): Promise<Record<string, unknown>> {
   const envelope: Record<string, unknown> = {
     [`${callName}Request`]: {
@@ -81,8 +82,8 @@ export async function ebayTradingApi(
 
   const xmlBody = `<?xml version="1.0" encoding="utf-8"?>\n${xmlBuilder.build(envelope) as string}`;
 
-  const siteId = process.env.EBAY_SITE_ID ?? "2"; // 2 = Canada
-
+  const mc = getEbayMarketplaceConfig(marketplaceId);
+  const siteId = mc.siteId;
   const { apiBase } = getEbayUrls();
 
   const response = await fetch(`${apiBase}/ws/api.dll`, {
@@ -184,12 +185,14 @@ export async function uploadSiteHostedPictures(
 // Build Item payload from ListingData
 // ---------------------------------------------------------------------------
 
-function buildItemPayload(listing: ListingData): Record<string, unknown> {
+function buildItemPayload(listing: ListingData, marketplaceId?: string): Record<string, unknown> {
   if (!listing.location && !listing.postal_code) {
     throw new Error(
       "eBay seller location is missing. Save a location or postal code in eBay publish settings.",
     );
   }
+
+  const mc = getEbayMarketplaceConfig(marketplaceId);
 
   return {
     Item: {
@@ -199,8 +202,8 @@ function buildItemPayload(listing: ListingData): Record<string, unknown> {
         CategoryID: listing.categoryId,
       },
       StartPrice: listing.price_cad,
-      Currency: "CAD",
-      Country: "CA",
+      Currency: mc.currency,
+      Country: mc.country,
       ...(listing.location ? { Location: listing.location } : {}),
       ...(listing.postal_code ? { PostalCode: listing.postal_code } : {}),
       ListingType:
@@ -230,7 +233,7 @@ function buildItemPayload(listing: ListingData): Record<string, unknown> {
             SellerProfiles: listing.seller_profiles,
           }
         : {}),
-      Site: "Canada",
+      Site: mc.country === "CA" ? "Canada" : "US",
       DispatchTimeMax: 3,
     },
   };
@@ -284,9 +287,10 @@ function parseWarnings(response: Record<string, unknown>): string[] {
 export async function verifyAddItem(
   listing: ListingData,
   token: string,
+  marketplaceId?: string,
 ): Promise<{ fees: Record<string, number>; warnings: string[] }> {
-  const itemPayload = buildItemPayload(listing);
-  const response = await ebayTradingApi("VerifyAddItem", itemPayload, token);
+  const itemPayload = buildItemPayload(listing, marketplaceId);
+  const response = await ebayTradingApi("VerifyAddItem", itemPayload, token, marketplaceId);
 
   return {
     fees: parseFees(response),
@@ -301,9 +305,10 @@ export async function verifyAddItem(
 export async function addItem(
   listing: ListingData,
   token: string,
+  marketplaceId?: string,
 ): Promise<{ itemId: string; fees: Record<string, number> }> {
-  const itemPayload = buildItemPayload(listing);
-  const response = await ebayTradingApi("AddItem", itemPayload, token);
+  const itemPayload = buildItemPayload(listing, marketplaceId);
+  const response = await ebayTradingApi("AddItem", itemPayload, token, marketplaceId);
 
   const itemId = response["ItemID"];
   if (typeof itemId !== "string") {

@@ -1,5 +1,5 @@
 import { supabase } from "../../lib/supabase.js";
-import { getEbayMarketplaceId, getEbayUrls } from "./config.js";
+import { getEbayMarketplaceId, getEbayMarketplaceConfig, getEbayUrls, SUPPORTED_MARKETPLACES, type EbayMarketplaceConfig } from "./config.js";
 import { getValidEbayToken } from "./tokenManager.js";
 
 type PolicyType = "fulfillment" | "payment" | "return";
@@ -162,11 +162,14 @@ async function getLinkedAccount(userId: string): Promise<boolean> {
 
 export async function getStoredSellerSettings(
   userId: string,
+  marketplaceId?: string,
 ): Promise<EbaySellerSettings | null> {
+  const mid = marketplaceId ?? getEbayMarketplaceId();
   const { data, error } = await supabase
     .from("ebay_seller_settings")
     .select("*")
     .eq("user_id", userId)
+    .eq("marketplace_id", mid)
     .maybeSingle();
 
   if (error) {
@@ -317,7 +320,7 @@ async function upsertSellerSettings(
         ...payload,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "user_id" },
+      { onConflict: "user_id,marketplace_id" },
     )
     .select("*")
     .single();
@@ -379,14 +382,15 @@ function buildAutoSelectionPayload(
 
 export async function getEbayPublishSettingsState(
   userId: string,
+  marketplaceId?: string,
 ): Promise<EbayPublishSettingsState> {
   const linked = await getLinkedAccount(userId);
-  const marketplaceId = getEbayMarketplaceId();
+  const mid = marketplaceId ?? getEbayMarketplaceId();
 
   if (!linked) {
     return {
       linked: false,
-      marketplace_id: marketplaceId,
+      marketplace_id: mid,
       settings: null,
       available_policies: {
         fulfillment: [],
@@ -401,15 +405,15 @@ export async function getEbayPublishSettingsState(
   }
 
   let settings = applyLocationFallback(
-    await getStoredSellerSettings(userId),
-    marketplaceId,
+    await getStoredSellerSettings(userId, mid),
+    mid,
   );
 
   let policies: EbayBusinessPolicyBundle;
   try {
     policies = await fetchSellerBusinessPolicies(
       userId,
-      settings?.marketplace_id ?? marketplaceId,
+      settings?.marketplace_id ?? mid,
     );
   } catch (err) {
     // If Business Policies API fails (e.g. not opted in), return empty policies
@@ -417,7 +421,7 @@ export async function getEbayPublishSettingsState(
     const errMsg = err instanceof Error ? err.message : String(err);
     return {
       linked: true,
-      marketplace_id: settings?.marketplace_id ?? marketplaceId,
+      marketplace_id: settings?.marketplace_id ?? mid,
       settings,
       available_policies: {
         fulfillment: [],
@@ -434,7 +438,7 @@ export async function getEbayPublishSettingsState(
   const autoSelection = buildAutoSelectionPayload(
     settings,
     policies,
-    settings?.marketplace_id ?? marketplaceId,
+    settings?.marketplace_id ?? mid,
   );
 
   if (autoSelection) {
@@ -445,7 +449,7 @@ export async function getEbayPublishSettingsState(
 
   return {
     linked: true,
-    marketplace_id: settings?.marketplace_id ?? marketplaceId,
+    marketplace_id: settings?.marketplace_id ?? mid,
     settings,
     available_policies: policies,
     readiness: {
@@ -501,5 +505,5 @@ export async function saveEbayPublishSettings(
   };
 
   await upsertSellerSettings(userId, payload);
-  return getEbayPublishSettingsState(userId);
+  return getEbayPublishSettingsState(userId, marketplaceId);
 }

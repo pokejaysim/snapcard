@@ -2,6 +2,37 @@
  * eBay API URL configuration — switches between sandbox and production
  * based on the EBAY_ENVIRONMENT env var (defaults to "sandbox").
  */
+
+export interface EbayMarketplaceConfig {
+  marketplaceId: string;
+  siteId: string;
+  country: string;
+  currency: string;
+  label: string;
+  categoryDefault: string;
+}
+
+export const EBAY_MARKETPLACES: Record<string, EbayMarketplaceConfig> = {
+  EBAY_CA: {
+    marketplaceId: "EBAY_CA",
+    siteId: "2",
+    country: "CA",
+    currency: "CAD",
+    label: "eBay Canada",
+    categoryDefault: "183454",
+  },
+  EBAY_US: {
+    marketplaceId: "EBAY_US",
+    siteId: "0",
+    country: "US",
+    currency: "USD",
+    label: "eBay US",
+    categoryDefault: "183454",
+  },
+};
+
+export const SUPPORTED_MARKETPLACES = Object.keys(EBAY_MARKETPLACES);
+
 export function getEbayUrls() {
   const env = process.env.EBAY_ENVIRONMENT ?? "sandbox";
   return env === "production"
@@ -11,6 +42,15 @@ export function getEbayUrls() {
 
 export function isMockMode(): boolean {
   return process.env.EBAY_MOCK_MODE === "true" || !process.env.EBAY_APP_ID;
+}
+
+export function getEbayMarketplaceConfig(marketplaceId?: string): EbayMarketplaceConfig {
+  const id = marketplaceId ?? process.env.EBAY_MARKETPLACE_ID ?? getEbayMarketplaceId();
+  const config = EBAY_MARKETPLACES[id];
+  if (!config) {
+    throw new Error(`Unsupported eBay marketplace: ${id}. Supported: ${SUPPORTED_MARKETPLACES.join(", ")}`);
+  }
+  return config;
 }
 
 export function getEbayMarketplaceId(): string {

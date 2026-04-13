@@ -80,6 +80,8 @@ router.post("/listings", requireAuth, async (req, res) => {
     listing_type?: string;
     duration?: number;
     price_cad?: number;
+    marketplace_id?: string;
+    currency_code?: string;
     ebay_aspects?: Record<string, string | string[]>;
   };
 
@@ -185,6 +187,8 @@ router.post("/listings", requireAuth, async (req, res) => {
         body.duration,
       ),
       price_cad: body.price_cad ?? null,
+      marketplace_id: body.marketplace_id ?? "EBAY_CA",
+      currency_code: body.currency_code ?? (body.marketplace_id === "EBAY_US" ? "USD" : "CAD"),
       ebay_aspects: sanitizeEbayAspects(body.ebay_aspects),
       photo_urls: [],
     })

@@ -93,6 +93,12 @@ export type CardCondition = "NM" | "LP" | "MP" | "HP" | "DMG";
 export type CardGame = "pokemon";
 export type CardType = "raw" | "graded";
 export type GradingCompany = "PSA" | "BGS" | "CGC" | "SGC" | "other";
+export type EbayMarketplace = "EBAY_CA" | "EBAY_US";
+
+export const EBAY_MARKETPLACE_CONFIG: Record<EbayMarketplace, { siteId: string; country: string; currency: string; label: string }> = {
+  EBAY_CA: { siteId: "2", country: "CA", currency: "CAD", label: "eBay Canada" },
+  EBAY_US: { siteId: "0", country: "US", currency: "USD", label: "eBay US" },
+};
 
 export interface Listing {
   id: string;
@@ -117,6 +123,8 @@ export interface Listing {
   title: string | null;
   description: string | null;
   price_cad: number | null;
+  marketplace_id: string;
+  currency_code: string;
   listing_type: ListingType;
   duration: number;
   ebay_aspects: Record<string, string | string[]> | null;

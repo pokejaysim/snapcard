@@ -160,9 +160,10 @@ router.get("/account/ebay-status", requireAuth, async (req, res) => {
 
 router.get("/account/ebay-publish-settings", requireAuth, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
+  const marketplaceId = req.query.marketplace_id as string | undefined;
 
   try {
-    const settings = await getEbayPublishSettingsState(authReq.userId);
+    const settings = await getEbayPublishSettingsState(authReq.userId, marketplaceId);
     res.json(settings);
   } catch (error) {
     console.error("Failed to load eBay publish settings:", error);
