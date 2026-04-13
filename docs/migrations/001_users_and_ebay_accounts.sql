@@ -32,7 +32,7 @@ CREATE POLICY "Service role can insert users"
 CREATE TABLE ebay_accounts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  ebay_token VARCHAR(2048) NOT NULL,
+  ebay_token TEXT NOT NULL,
   ebay_user_id VARCHAR(255) NOT NULL,
   site_id INT DEFAULT 2,
   created_at TIMESTAMPTZ DEFAULT NOW(),
