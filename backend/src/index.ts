@@ -23,7 +23,8 @@ const allowedOrigins = [
 ].filter(Boolean) as string[];
 
 app.use(cors({ origin: allowedOrigins }));
-app.use(express.json());
+// 25mb limit — enough for a 10-15mb photo as base64 data URL
+app.use(express.json({ limit: "25mb" }));
 
 // Routes
 app.use("/api", healthRouter);
