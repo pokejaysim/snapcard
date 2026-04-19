@@ -18,14 +18,15 @@ const app = express();
 const port = process.env.PORT ?? 3001;
 
 // Startup diagnostic — verify critical env vars are loaded by the running process.
-// Logs length only, not the key itself.
-console.log(
-  `[Startup] ANTHROPIC_API_KEY: ${
-    process.env.ANTHROPIC_API_KEY
-      ? `present (length=${String(process.env.ANTHROPIC_API_KEY.length)})`
-      : "MISSING"
-  }`,
-);
+// Logs length only, not the values themselves.
+const envReport = (name: string): string => {
+  const value = process.env[name];
+  return value ? `present (length=${String(value.length)})` : "MISSING";
+};
+console.log(`[Startup] ANTHROPIC_API_KEY: ${envReport("ANTHROPIC_API_KEY")}`);
+console.log(`[Startup] CLOUDINARY_CLOUD_NAME: ${envReport("CLOUDINARY_CLOUD_NAME")}`);
+console.log(`[Startup] CLOUDINARY_API_KEY: ${envReport("CLOUDINARY_API_KEY")}`);
+console.log(`[Startup] CLOUDINARY_API_SECRET: ${envReport("CLOUDINARY_API_SECRET")}`);
 
 const allowedOrigins = [
   process.env.FRONTEND_URL,

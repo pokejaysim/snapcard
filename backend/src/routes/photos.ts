@@ -92,7 +92,8 @@ router.post(
       res.status(201).json({ url });
     } catch (err) {
       console.error("Standalone photo upload failed:", err);
-      res.status(500).json({ error: "Photo upload failed", code: "UPLOAD_ERROR" });
+      const message = err instanceof Error ? err.message : "Photo upload failed";
+      res.status(500).json({ error: message, code: "UPLOAD_ERROR" });
     }
   },
 );
