@@ -174,6 +174,23 @@ async function identifyFromPhash(
   };
 }
 
+/**
+ * Feature flag for the pHash fast-path. Disabled by default because the
+ * current dHash implementation produces too many false positives on real
+ * user photos (cards on stands, glare, backgrounds, perspective) versus the
+ * clean top-down reference scans in the pokemontcg.io index. Distance=10
+ * threshold was catching semantically-unrelated cards as "confident" matches.
+ *
+ * Re-enable via env var once we have a more robust matcher — candidates:
+ *   - Tighten threshold drastically (distance ≤ 3 or 4) for exact-match only
+ *   - DCT-based pHash instead of dHash (better perspective tolerance)
+ *   - CLIP-style embeddings from a small vision model
+ *
+ * The card_hashes table and RPC are still useful for catalog autocomplete /
+ * duplicate detection even with the fast-path off, so we keep the scaffolding.
+ */
+const PHASH_FAST_PATH_ENABLED = process.env.PHASH_FAST_PATH_ENABLED === "true";
+
 export async function identifyCard(
   imageUrl: string
 ): Promise<CardIdentificationResult> {
@@ -181,8 +198,10 @@ export async function identifyCard(
   // index. If we find a confident match, we can skip the Opus call entirely.
   // If not (e.g. photo too cluttered, card not in index, non-Pokemon card),
   // fall through to the vision model.
-  const phashResult = await identifyFromPhash(imageUrl);
-  if (phashResult) return phashResult;
+  if (PHASH_FAST_PATH_ENABLED) {
+    const phashResult = await identifyFromPhash(imageUrl);
+    if (phashResult) return phashResult;
+  }
 
   const response = await anthropic.messages.create({
     model: "claude-opus-4-6",
