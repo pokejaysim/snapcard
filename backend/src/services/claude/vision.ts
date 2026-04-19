@@ -1,5 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { verifyPokemonCard } from "../cardVerifier.js";
+import {
+  computeDHash,
+  findNearestCard,
+  PHASH_MATCH_THRESHOLD,
+} from "../hashMatching.js";
 
 const anthropic = new Anthropic();
 
@@ -99,9 +104,86 @@ function imageSourceFor(imageUrl: string): ImageSource {
   return { type: "url", url: imageUrl };
 }
 
+/**
+ * Fetch an image URL or parse a data URL into a raw Buffer.
+ * Returns null if the URL can't be loaded.
+ */
+async function loadImageBuffer(imageUrl: string): Promise<Buffer | null> {
+  try {
+    if (imageUrl.startsWith("data:")) {
+      const match = /^data:[^;]+;base64,(.+)$/.exec(imageUrl);
+      if (!match?.[1]) return null;
+      return Buffer.from(match[1], "base64");
+    }
+    const res = await fetch(imageUrl);
+    if (!res.ok) return null;
+    return Buffer.from(await res.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Try to identify a card purely from its image fingerprint (pHash) against the
+ * pre-built card_hashes index. Returns a CardIdentificationResult populated
+ * from the Pokemon TCG database, or null if no confident match is found.
+ *
+ * When this succeeds, we skip the Opus call entirely — cutting per-card
+ * identification cost from ~$0.15 to ~$0 and latency from ~3s to ~500ms.
+ */
+async function identifyFromPhash(
+  imageUrl: string,
+): Promise<CardIdentificationResult | null> {
+  const buffer = await loadImageBuffer(imageUrl);
+  if (!buffer) return null;
+
+  let hash: Buffer;
+  try {
+    // Center-crop helps strip background clutter from user photos (card on a
+    // stand, dark background, etc.) before hashing. Not perfect but gives us
+    // a real chance of matching the clean reference image.
+    hash = await computeDHash(buffer, true);
+  } catch (err) {
+    console.warn(
+      "[vision] computeDHash failed:",
+      err instanceof Error ? err.message : String(err),
+    );
+    return null;
+  }
+
+  const match = await findNearestCard(hash, PHASH_MATCH_THRESHOLD);
+  if (!match) return null;
+
+  console.log(
+    `[vision] pHash match: ${match.card_name} (${match.pokemon_tcg_id}) — distance=${String(match.distance)}`,
+  );
+
+  // pHash matches don't tell us condition, so default to NM and let the user
+  // adjust in the UI. Language defaults to English since our index is English.
+  return {
+    card_name: match.card_name,
+    set_name: match.set_name ?? "",
+    card_number: match.card_number ?? "",
+    rarity: match.rarity ?? "",
+    language: "English",
+    condition: "NM",
+    card_game: "pokemon",
+    // Confidence scales from 1.0 (perfect match, distance=0) down to ~0.85
+    // at the threshold. Still high enough that the UI treats it as confident.
+    confidence: Math.max(0.85, 1 - match.distance / 64),
+  };
+}
+
 export async function identifyCard(
   imageUrl: string
 ): Promise<CardIdentificationResult> {
+  // Fast path: try pHash matching against the pre-built Pokemon TCG card
+  // index. If we find a confident match, we can skip the Opus call entirely.
+  // If not (e.g. photo too cluttered, card not in index, non-Pokemon card),
+  // fall through to the vision model.
+  const phashResult = await identifyFromPhash(imageUrl);
+  if (phashResult) return phashResult;
+
   const response = await anthropic.messages.create({
     model: "claude-opus-4-6",
     max_tokens: 1024,
