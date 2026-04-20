@@ -30,8 +30,8 @@ Monorepo with three top-level directories:
 - PriceCharting + eBay sold comps for pricing
 
 ### Hosting
-- **Frontend**: Cloudflare Pages (direct upload, NOT GitHub auto-deploy)
-- **Backend**: Not yet deployed (runs locally on port 3001)
+- **Frontend**: Cloudflare Pages (direct upload via OpenClaw, NOT GitHub auto-deploy)
+- **Backend**: Railway (deployed from GitHub `main`, managed by OpenClaw/Peter — ping them to redeploy after pushing backend changes)
 - **Database**: Supabase hosted PostgreSQL
 
 ## Key Commands
@@ -96,7 +96,16 @@ backend/src/
 
 ### Card Identification (Two Methods)
 1. **Pokemon TCG API search** (free) — `CardSearch` component with debounced search, auto-fills card details
-2. **Claude Vision AI** (premium) — Upload photo, AI identifies card name, set, number, rarity, condition
+2. **Claude Vision AI** (premium) — Upload photo, AI identifies card name, set, number, rarity, condition. Uses **Claude Opus** (Sonnet/Haiku tested and found insufficient for card accuracy).
+
+**pHash fast-path**: There's an experimental pre-Opus perceptual-hash lookup in `backend/src/services/claude/vision.ts` that was producing false positives (composition-based matching, not content). Gated behind `PHASH_FAST_PATH_ENABLED=true` env var — **leave disabled** until a real content-aware hash index is built.
+
+### Pricing Pipeline
+Pricing suggestions combine two sources and average them:
+- **PriceCharting** (`backend/src/services/pricing/pricecharting.ts`) — paid API, gives raw/PSA 9/PSA 10 USD prices. Uses progressive query fallback (`name + set + number` → `name + set` → `name`) to match the right variant. Applies condition multipliers (NM=1.0, LP=0.85, MP=0.7, HP=0.5, DMG=0.3) to the raw price.
+- **eBay Finding API sold comps** (`backend/src/services/pricing/ebayComps.ts`) — `findCompletedItems` is deprecated and returns intermittent 500s; we tolerate that. Only USD/CAD comps are kept; other currencies are dropped (mixing currencies gave garbage averages).
+
+Both services return a tagged-status discriminated union (`no_key | api_error | not_found | ok`) so the UI can show a targeted reason when a source doesn't contribute. The `PricingSuggestion` component shows the PriceCharting matched product name + a "Verify" link to the source page so users can catch wrong-variant matches.
 
 ### Plan Gating
 Currently all plans (free/pro/enterprise) have identical limits (all features unlocked). Plan config lives in `backend/src/lib/plans.ts`. The `requirePlan()` middleware and frontend UI conditionals still exist but won't gate anything until limits are re-differentiated.
@@ -119,6 +128,11 @@ Currently all plans (free/pro/enterprise) have identical limits (all features un
 - `SUPABASE_URL` — Supabase project URL
 - `SUPABASE_SERVICE_ROLE_KEY` — Supabase service role key (secret)
 - `ANTHROPIC_API_KEY` — Claude API key for AI identification
-- `EBAY_*` — eBay OAuth credentials
+- `EBAY_*` — eBay OAuth credentials (listing publish)
+- `EBAY_APP_ID` — eBay Finding API app ID (used for sold comps, separate from OAuth creds)
 - `CLOUDINARY_*` — Image hosting credentials
 - `POKEMON_TCG_API_KEY` — Optional, for higher rate limits on pokemon TCG API
+- `PRICECHARTING_API_KEY` — PriceCharting API key for card price lookups (~$30/mo)
+- `USD_TO_CAD_RATE` — Optional, overrides the default 1.37 FX rate used for USD→CAD conversion
+- `CONDITION_MULTIPLIERS_JSON` — Optional JSON to override raw-card condition multipliers (defaults: NM=1.0, LP=0.85, MP=0.7, HP=0.5, DMG=0.3)
+- `PHASH_FAST_PATH_ENABLED` — Leave unset/false. Experimental pre-Opus perceptual-hash match is currently disabled due to false positives.
