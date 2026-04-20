@@ -18,7 +18,15 @@
  */
 
 export interface PriceChartingResult {
+  /** PriceCharting's numeric product ID (used to build the verification URL). */
+  product_id: string | null;
+  /** Product name exactly as PriceCharting returned it — so users can see
+   *  whether our query matched the right card. */
   product_name: string;
+  /** "Console name" — PriceCharting's category field (e.g. "Pokemon Base Set"). */
+  console_name: string | null;
+  /** Direct link to the PriceCharting product page. Null if we can't build one. */
+  product_url: string | null;
   /** Raw / ungraded card price in USD. Primary field for most of our users. */
   price_raw_usd: number | null;
   /** PSA/BGS 9 graded price in USD. */
@@ -41,7 +49,9 @@ export type PriceChartingLookup =
   | { status: "ok"; result: PriceChartingResult };
 
 interface PriceChartingResponse {
+  id?: string | number;
   "product-name"?: string;
+  "console-name"?: string;
   "loose-price"?: number;
   "graded-price"?: number;
   "manual-only-price"?: number;
@@ -122,8 +132,19 @@ export async function searchPriceCharting(
     const centsToDollars = (v: unknown): number | null =>
       typeof v === "number" && v > 0 ? v / 100 : null;
 
+    // Build a direct link to the product page so users can verify.
+    // PriceCharting's /game/{id} URL redirects to the canonical product page.
+    // Fall back to a search URL if for some reason the id is missing.
+    const productId = data.id !== undefined ? String(data.id) : null;
+    const productUrl = productId
+      ? `https://www.pricecharting.com/game/${productId}`
+      : `https://www.pricecharting.com/search-products?q=${encodeURIComponent(query)}&type=prices`;
+
     const result: PriceChartingResult = {
+      product_id: productId,
       product_name: data["product-name"],
+      console_name: data["console-name"] ?? null,
+      product_url: productUrl,
       price_raw_usd: centsToDollars(data["loose-price"]),
       price_graded_9_usd: centsToDollars(data["graded-price"]),
       // Prefer manual-only-price (PSA 10) over box/bgs-10 (BGS 10), fall back.

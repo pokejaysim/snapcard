@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
-import { DollarSign, Loader2, TrendingUp, AlertTriangle, Info } from "lucide-react";
+import { DollarSign, Loader2, TrendingUp, AlertTriangle, Info, ExternalLink } from "lucide-react";
 
 interface EbayComp {
   title: string;
@@ -19,12 +19,22 @@ type SourceStatus =
   | { state: "api_error"; message: string }
   | { state: "not_found"; query: string };
 
+interface PriceChartingDetail {
+  product_name: string;
+  console_name: string | null;
+  product_url: string | null;
+  price_raw_usd: number | null;
+  price_graded_9_usd: number | null;
+  price_graded_10_usd: number | null;
+}
+
 interface PriceSuggestionResult {
   suggested_price_cad: number | null;
   pricechart_price: number | null;
   ebay_avg_price: number | null;
   ebay_comps: EbayComp[];
   reasoning: string;
+  pricecharting_detail?: PriceChartingDetail | null;
   sources?: {
     pricecharting: SourceStatus;
     ebay: SourceStatus;
@@ -168,6 +178,61 @@ export function PricingSuggestion({
             {/* Reasoning */}
             <p className="text-muted-foreground">{result.reasoning}</p>
 
+            {/* PriceCharting match detail — shows the matched product name
+                and raw USD prices so users can click through and verify. */}
+            {result.pricecharting_detail && (
+              <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground">
+                      PriceCharting matched
+                    </p>
+                    <p className="font-medium">
+                      {result.pricecharting_detail.product_name}
+                    </p>
+                    {result.pricecharting_detail.console_name && (
+                      <p className="text-xs text-muted-foreground">
+                        {result.pricecharting_detail.console_name}
+                      </p>
+                    )}
+                  </div>
+                  {result.pricecharting_detail.product_url && (
+                    <a
+                      href={result.pricecharting_detail.product_url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium text-primary hover:bg-primary/5"
+                    >
+                      Verify
+                      <ExternalLink className="size-3" />
+                    </a>
+                  )}
+                </div>
+
+                {/* USD price ladder — raw / PSA 9 / PSA 10 so the user can
+                    sanity-check which grade tier our suggestion anchored on. */}
+                <div className="grid grid-cols-3 gap-2 border-t pt-2">
+                  <PricePoint
+                    label="Raw (ungraded)"
+                    usd={result.pricecharting_detail.price_raw_usd}
+                    highlight
+                  />
+                  <PricePoint
+                    label="PSA 9"
+                    usd={result.pricecharting_detail.price_graded_9_usd}
+                  />
+                  <PricePoint
+                    label="PSA 10"
+                    usd={result.pricecharting_detail.price_graded_10_usd}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Our suggestion uses the <span className="font-medium">raw</span> price
+                  scaled by your card's condition, converted to CAD.
+                </p>
+              </div>
+            )}
+
             {/* Comps */}
             {result.ebay_comps.length > 0 && (
               <div>
@@ -234,6 +299,30 @@ function SourceTile({
       <p className="flex items-start gap-1.5 text-xs font-medium">
         <Info className="mt-0.5 size-3 shrink-0" />
         <span>{text}</span>
+      </p>
+    </div>
+  );
+}
+
+/**
+ * One cell in the PriceCharting USD price ladder (raw / PSA 9 / PSA 10).
+ * Highlighted cell is the one our CAD suggestion anchored on.
+ */
+function PricePoint({
+  label,
+  usd,
+  highlight = false,
+}: {
+  label: string;
+  usd: number | null;
+  highlight?: boolean;
+}) {
+  const bgClass = highlight ? "bg-primary/10" : "bg-background";
+  return (
+    <div className={`rounded p-2 ${bgClass}`}>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="font-medium">
+        {usd !== null ? `$${usd.toFixed(2)} USD` : "—"}
       </p>
     </div>
   );

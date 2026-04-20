@@ -45,12 +45,29 @@ type SourceStatus =
   | { state: "api_error"; message: string }
   | { state: "not_found"; query: string };
 
+/**
+ * Full detail about the PriceCharting match, so the frontend can show users
+ * what product was matched and link through to the source for verification.
+ * All USD prices are unconverted — we show the raw numbers PriceCharting
+ * returned alongside the CAD suggestion.
+ */
+interface PriceChartingDetail {
+  product_name: string;
+  console_name: string | null;
+  product_url: string | null;
+  price_raw_usd: number | null;
+  price_graded_9_usd: number | null;
+  price_graded_10_usd: number | null;
+}
+
 interface SuggestResponse {
   suggested_price_cad: number | null;
   pricechart_price: number | null;
   ebay_avg_price: number | null;
   ebay_comps: EbayCompResult[];
   reasoning: string;
+  /** Full PriceCharting match details so users can verify against the source. */
+  pricecharting_detail: PriceChartingDetail | null;
   sources: {
     pricecharting: SourceStatus;
     ebay: SourceStatus;
@@ -189,6 +206,16 @@ router.post("/pricing/suggest", requireAuth, requirePlan("pricing_suggestions"),
     ebay_avg_price: ebayAvgPrice,
     ebay_comps: ebayComps,
     reasoning,
+    pricecharting_detail: pcResult
+      ? {
+          product_name: pcResult.product_name,
+          console_name: pcResult.console_name,
+          product_url: pcResult.product_url,
+          price_raw_usd: pcResult.price_raw_usd,
+          price_graded_9_usd: pcResult.price_graded_9_usd,
+          price_graded_10_usd: pcResult.price_graded_10_usd,
+        }
+      : null,
     sources: {
       pricecharting: pcStatus,
       ebay: ebayStatus,
