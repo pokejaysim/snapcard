@@ -109,6 +109,7 @@ export default function ListingDetail() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingAspects, setSavingAspects] = useState(false);
+  const [savingQuickCondition, setSavingQuickCondition] = useState(false);
   const [error, setError] = useState("");
   const [publishMode, setPublishMode] = useState<PublishMode>("now");
   const [scheduledAtLocal, setScheduledAtLocal] = useState(
@@ -226,6 +227,28 @@ export default function ListingDetail() {
       setError(err instanceof Error ? err.message : "Failed to save changes");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleQuickConditionSave(condition: string) {
+    if (!id) return;
+    setError("");
+    setSavingQuickCondition(true);
+
+    try {
+      await apiFetch(`/listings/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ condition }),
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["listing", id] }),
+        queryClient.invalidateQueries({ queryKey: ["listings"] }),
+        queryClient.invalidateQueries({ queryKey: ["publish-readiness", id] }),
+      ]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save condition");
+    } finally {
+      setSavingQuickCondition(false);
     }
   }
 
@@ -421,6 +444,11 @@ export default function ListingDetail() {
   const isMockListing = mockPublished || (listing.ebay_item_id != null && String(listing.ebay_item_id).startsWith("MOCK-"));
   const sellerMissing = readiness?.missing.filter((item) => item.scope === "seller") ?? [];
   const listingMissing = readiness?.missing.filter((item) => item.scope === "listing") ?? [];
+  const missingRawCondition = listingMissing.some(
+    (item) =>
+      item.code === "missing_card_condition" ||
+      item.message.toLowerCase().includes("ungraded card condition"),
+  );
   const canAttemptPublish = (isDraft || isError) && !editing;
   const publishBlocked =
     publishing ||
@@ -553,6 +581,36 @@ export default function ListingDetail() {
                         </li>
                       ))}
                     </ul>
+                    {missingRawCondition && (
+                      <div className="mt-4 rounded-lg border bg-background p-3">
+                        <p className="text-sm font-medium">Choose card condition</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Pick the closest raw card condition. You can change it later from Card Details.
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {CONDITIONS.map((condition) => (
+                            <Button
+                              key={condition}
+                              type="button"
+                              variant={
+                                listing.condition === condition
+                                  ? "default"
+                                  : "outline"
+                              }
+                              size="sm"
+                              onClick={() => void handleQuickConditionSave(condition)}
+                              disabled={savingQuickCondition}
+                            >
+                              {savingQuickCondition &&
+                              listing.condition === condition ? (
+                                <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                              ) : null}
+                              {condition}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -890,13 +948,20 @@ export default function ListingDetail() {
                     ]
                   : [["Condition", listing.condition]]),
               ].map(
-                ([label, value]) =>
-                  value && (
-                    <div key={label}>
-                      <dt className="text-muted-foreground">{label}</dt>
-                      <dd className="font-medium">{value}</dd>
-                    </div>
-                  )
+                ([label, value]) => (
+                  <div key={label}>
+                    <dt className="text-muted-foreground">{label}</dt>
+                    <dd
+                      className={
+                        value
+                          ? "font-medium"
+                          : "font-medium text-amber-700"
+                      }
+                    >
+                      {value || "Not set"}
+                    </dd>
+                  </div>
+                )
               )}
             </dl>
           )}
