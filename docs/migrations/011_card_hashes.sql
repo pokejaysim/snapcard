@@ -29,6 +29,25 @@ CREATE INDEX IF NOT EXISTS idx_card_hashes_card_name ON card_hashes(card_name);
 -- but bit_count() on BYTEA is fast enough for ~20k rows (<500ms).
 -- If growth demands, we can add LSH-style prefix indexing later.
 
+-- Helper: XOR two 8-byte hashes byte-by-byte and return Hamming distance
+-- Uses popcount via unnest+generate_series to count set bits
+CREATE OR REPLACE FUNCTION hamming_distance(a BYTEA, b BYTEA)
+RETURNS INT
+LANGUAGE SQL
+IMMUTABLE
+AS $$
+  WITH xor_bytes AS (
+    SELECT generate_series(0, 7) AS i
+  ),
+  bit_counts AS (
+    SELECT SUM(
+      length(replace(lpad(to_hex(get_byte(a, x.i) # get_byte(b, x.i)), 2, '0'), '0', ''))
+    ) AS total
+    FROM xor_bytes x
+  )
+  SELECT total::INT FROM bit_counts;
+$$;
+
 -- ─────────────────────────────────────────────────────────────────────
 -- RPC: find_nearest_card_hash
 --
@@ -36,7 +55,7 @@ CREATE INDEX IF NOT EXISTS idx_card_hashes_card_name ON card_hashes(card_name);
 -- from the query hash, if that distance is <= max_distance.
 --
 -- Called from backend via supabase.rpc('find_nearest_card_hash', ...).
--- Computes bit_count() server-side so we don't ship 20k rows to Node.
+-- Computes Hamming distance server-side so we don't ship 20k rows to Node.
 -- ─────────────────────────────────────────────────────────────────────
 
 CREATE OR REPLACE FUNCTION find_nearest_card_hash(
@@ -64,10 +83,10 @@ AS $$
     ch.card_number,
     ch.rarity,
     ch.image_url,
-    bit_count(ch.phash # query_hash)::INT AS distance
+    hamming_distance(ch.phash, query_hash) AS distance
   FROM card_hashes ch
-  WHERE bit_count(ch.phash # query_hash) <= max_distance
-  ORDER BY bit_count(ch.phash # query_hash) ASC
+  WHERE hamming_distance(ch.phash, query_hash) <= max_distance
+  ORDER BY hamming_distance(ch.phash, query_hash) ASC
   LIMIT 1;
 $$;
 

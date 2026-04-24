@@ -84,3 +84,37 @@ export function getEbayMarketplaceId(): string {
 export function getTradingCardCategoryId(): string {
   return process.env.EBAY_TRADING_CARD_CATEGORY_ID ?? "183454";
 }
+
+/**
+ * Live publish allowlist — only these user IDs or emails can publish to production eBay.
+ * Set EBAY_ALLOW_LIVE_PUBLISH_USER_IDS (comma-separated Supabase user IDs)
+ * and/or EBAY_ALLOW_LIVE_PUBLISH_EMAILS (comma-separated emails).
+ * If neither is set, all users are allowed (e.g. sandbox mode).
+ */
+export function isLivePublishAllowed(userId: string, userEmail: string): { allowed: boolean; reason?: string } {
+  const env = process.env.EBAY_ENVIRONMENT ?? "sandbox";
+  if (env !== "production") {
+    // Sandbox: everyone can publish
+    return { allowed: true };
+  }
+
+  const allowedIds = (process.env.EBAY_ALLOW_LIVE_PUBLISH_USER_IDS ?? "").split(",").map(s => s.trim()).filter(Boolean);
+  const allowedEmails = (process.env.EBAY_ALLOW_LIVE_PUBLISH_EMAILS ?? "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+
+  // If no allowlist is configured in production, block everyone
+  if (allowedIds.length === 0 && allowedEmails.length === 0) {
+    return {
+      allowed: false,
+      reason: "Live eBay publishing is not yet available. SnapCard is in controlled beta testing.",
+    };
+  }
+
+  if (allowedIds.includes(userId) || allowedEmails.includes(userEmail.toLowerCase())) {
+    return { allowed: true };
+  }
+
+  return {
+    allowed: false,
+    reason: "Live eBay publishing is not yet available for your account. SnapCard is in controlled beta testing.",
+  };
+}

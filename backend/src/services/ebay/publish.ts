@@ -2,7 +2,7 @@ import { supabase } from "../../lib/supabase.js";
 import { publishQueue } from "../../lib/queue.js";
 import { verifyAddItem } from "./trading.js";
 import { getValidEbayToken } from "./tokenManager.js";
-import { isCanadaBetaMarketplace } from "./config.js";
+import { isCanadaBetaMarketplace, isLivePublishAllowed } from "./config.js";
 import { prepareListingForPublish } from "./readiness.js";
 
 export type PublishMode = "now" | "scheduled";
@@ -216,6 +216,7 @@ async function loadPublishOutcome(
 export async function requestPublish(
   listingId: string,
   userId: string,
+  userEmail: string,
   input: PublishRequestInput = {},
 ): Promise<PublishRequestResult> {
   const mode = normalizePublishMode(input.mode);
@@ -240,6 +241,15 @@ export async function requestPublish(
     return {
       ok: false,
       error: CANADA_BETA_ONLY_MESSAGE,
+    };
+  }
+
+  // ── Live publish allowlist ──────────────────────────────
+  const liveCheck = isLivePublishAllowed(userId, userEmail);
+  if (!liveCheck.allowed) {
+    return {
+      ok: false,
+      error: liveCheck.reason!,
     };
   }
 
@@ -364,8 +374,9 @@ export async function requestPublish(
 export async function schedulePublish(
   listingId: string,
   userId: string,
+  userEmail: string = "",
 ): Promise<{ scheduled: boolean; error?: string }> {
-  const result = await requestPublish(listingId, userId, {
+  const result = await requestPublish(listingId, userId, userEmail, {
     mode: "scheduled",
     scheduled_at: new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
   });

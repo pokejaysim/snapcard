@@ -564,7 +564,7 @@ router.post("/listings/bulk-publish", requireAuth, async (req, res) => {
         continue;
       }
 
-      const result = await requestPublish(listingId, authReq.userId, {
+      const result = await requestPublish(listingId, authReq.userId, authReq.userEmail, {
         mode,
         scheduled_at: body.scheduled_at,
       });
@@ -705,7 +705,7 @@ router.post("/listings/:id/publish", requireAuth, async (req, res) => {
   }
 
   // ── Real eBay publish ─────────────────────────────────
-  const result = await requestPublish(listingId, authReq.userId, {
+  const result = await requestPublish(listingId, authReq.userId, authReq.userEmail, {
     mode,
     scheduled_at: body.scheduled_at,
   });
