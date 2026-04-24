@@ -242,15 +242,31 @@ function conditionCandidatesForRaw(condition: string): string[] {
     case "NM":
       return ["Near Mint or Better", "Near Mint"];
     case "LP":
-      return ["Lightly Played", "Light Play"];
+      return ["Lightly Played (Excellent)", "Lightly Played", "Light Play", "Excellent"];
     case "MP":
-      return ["Moderately Played", "Moderate Play"];
+      return ["Moderately Played (Very Good)", "Moderately Played", "Moderate Play", "Very Good"];
     case "HP":
-      return ["Heavily Played", "Heavy Play"];
+      return ["Heavily Played (Poor)", "Heavily Played", "Heavy Play", "Poor"];
     case "DMG":
-      return ["Damaged", "Poor"];
+      return ["Poor", "Damaged", "Heavily Played (Poor)"];
     default:
       return [condition];
+  }
+}
+
+function staticRawConditionDescriptorValue(condition: string): string {
+  switch (condition.toUpperCase()) {
+    case "NM":
+      return "400010"; // Near Mint or Better
+    case "LP":
+      return "400011"; // Excellent
+    case "MP":
+      return "400012"; // Very Good
+    case "HP":
+    case "DMG":
+      return "400013"; // Poor
+    default:
+      return "400010";
   }
 }
 
@@ -428,7 +444,7 @@ function buildConditionInputs(
     "card condition",
   ]);
 
-  if (!cardConditionDescriptor || !listing.condition) {
+  if (!listing.condition) {
     return {
       conditionId: Number(rawCondition.conditionId),
       descriptors: [],
@@ -442,10 +458,13 @@ function buildConditionInputs(
     };
   }
 
-  const valueId = findDescriptorValue(
-    cardConditionDescriptor,
-    conditionCandidatesForRaw(listing.condition),
-  );
+  const descriptorId = cardConditionDescriptor?.id || "40001";
+  const valueId = cardConditionDescriptor
+    ? findDescriptorValue(
+        cardConditionDescriptor,
+        conditionCandidatesForRaw(listing.condition),
+      ) ?? staticRawConditionDescriptorValue(listing.condition)
+    : staticRawConditionDescriptorValue(listing.condition);
 
   if (!valueId) {
     return {
@@ -465,7 +484,7 @@ function buildConditionInputs(
     conditionId: Number(rawCondition.conditionId),
     descriptors: [
       {
-        Name: cardConditionDescriptor.id,
+        Name: descriptorId,
         Value: [valueId],
       },
     ],
