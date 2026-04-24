@@ -6,6 +6,10 @@ import {
   getEbayPublishSettingsState,
   saveEbayPublishSettings,
 } from "../services/ebay/sellerSettings.js";
+import {
+  getListingPreferences,
+  saveListingPreferences,
+} from "../services/listingPreferences.js";
 
 const router = Router();
 
@@ -129,6 +133,42 @@ router.patch("/account/onboarding", requireAuth, async (req, res) => {
   }
 
   res.json(data);
+});
+
+// ── Seller listing preferences ────────────────────────
+
+router.get("/account/listing-preferences", requireAuth, async (req, res) => {
+  const authReq = req as AuthenticatedRequest;
+
+  try {
+    const preferences = await getListingPreferences(authReq.userId);
+    res.json(preferences);
+  } catch (error) {
+    res.status(500).json({
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to load listing preferences",
+      code: "LISTING_PREFERENCES_ERROR",
+    });
+  }
+});
+
+router.put("/account/listing-preferences", requireAuth, async (req, res) => {
+  const authReq = req as AuthenticatedRequest;
+
+  try {
+    const preferences = await saveListingPreferences(authReq.userId, req.body);
+    res.json(preferences);
+  } catch (error) {
+    res.status(400).json({
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to save listing preferences",
+      code: "LISTING_PREFERENCES_SAVE_ERROR",
+    });
+  }
 });
 
 // ── Check eBay account link status ─────────────────────

@@ -53,6 +53,7 @@ interface DevListing {
   ebay_item_id: number | string | null;
   ebay_error: string | null;
   identified_by: string;
+  autopilot_metadata: Record<string, unknown> | null;
 }
 
 // Mutable array so new listings persist within the session
@@ -89,6 +90,7 @@ export const DEV_LISTINGS: DevListing[] = [
     ebay_item_id: 1234567890,
     ebay_error: null,
     identified_by: "manual",
+    autopilot_metadata: null,
   },
   {
     id: "dev-listing-2",
@@ -121,6 +123,7 @@ export const DEV_LISTINGS: DevListing[] = [
     ebay_item_id: null,
     ebay_error: null,
     identified_by: "manual",
+    autopilot_metadata: null,
   },
   {
     id: "dev-listing-3",
@@ -151,6 +154,7 @@ export const DEV_LISTINGS: DevListing[] = [
     ebay_item_id: null,
     ebay_error: null,
     identified_by: "manual",
+    autopilot_metadata: null,
   },
   {
     id: "dev-listing-4",
@@ -183,6 +187,7 @@ export const DEV_LISTINGS: DevListing[] = [
     ebay_item_id: null,
     ebay_error: "eBay API: Invalid shipping configuration. Please check your shipping settings.",
     identified_by: "manual",
+    autopilot_metadata: null,
   },
   {
     id: "dev-listing-5",
@@ -216,6 +221,7 @@ export const DEV_LISTINGS: DevListing[] = [
     ebay_item_id: null,
     ebay_error: null,
     identified_by: "manual",
+    autopilot_metadata: null,
   },
   {
     id: "dev-listing-6",
@@ -249,6 +255,7 @@ export const DEV_LISTINGS: DevListing[] = [
     ebay_item_id: 9876543210,
     ebay_error: null,
     identified_by: "manual",
+    autopilot_metadata: null,
   },
 ];
 

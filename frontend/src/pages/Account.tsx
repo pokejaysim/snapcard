@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
@@ -19,7 +21,7 @@ import {
   Crown,
   AlertTriangle,
 } from "lucide-react";
-import type { UsageInfo } from "../../../shared/types";
+import type { CardCondition, ListingPreference, ListingType, UsageInfo } from "../../../shared/types";
 
 interface AccountInfo {
   id: string;
@@ -46,6 +48,11 @@ export default function Account() {
   const { data: ebayStatus } = useQuery({
     queryKey: ["ebay-status"],
     queryFn: () => apiFetch<{ linked: boolean; ebay_user_id?: string }>("/account/ebay-status"),
+  });
+
+  const { data: listingPreferences } = useQuery({
+    queryKey: ["listing-preferences"],
+    queryFn: () => apiFetch<ListingPreference>("/account/listing-preferences"),
   });
 
   async function linkEbay() {
@@ -176,6 +183,174 @@ export default function Account() {
           <EbayPublishSetupCard />
         </div>
       )}
+
+      {listingPreferences && (
+        <ListingPreferencesCard initialPreferences={listingPreferences} />
+      )}
     </div>
+  );
+}
+
+function ListingPreferencesCard({
+  initialPreferences,
+}: {
+  initialPreferences: ListingPreference;
+}) {
+  const [preferences, setPreferences] = useState(initialPreferences);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setPreferences(initialPreferences);
+  }, [initialPreferences]);
+
+  async function savePreferences() {
+    setSaving(true);
+    setMessage("");
+    setError("");
+
+    try {
+      const saved = await apiFetch<ListingPreference>("/account/listing-preferences", {
+        method: "PUT",
+        body: JSON.stringify({
+          default_listing_type: preferences.default_listing_type,
+          default_batch_fixed_price: preferences.default_batch_fixed_price,
+          price_rounding_enabled: preferences.price_rounding_enabled,
+          default_raw_condition: preferences.default_raw_condition,
+          description_template: preferences.description_template,
+        }),
+      });
+      setPreferences(saved);
+      setMessage("Listing preferences saved.");
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Could not save listing preferences.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card className="mt-4">
+      <CardHeader>
+        <CardTitle className="text-base">Autopilot Listing Preferences</CardTitle>
+        <CardDescription>
+          Defaults SnapCard uses when it creates batch drafts for eBay Canada.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {message && (
+          <div className="rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm text-primary">
+            {message}
+          </div>
+        )}
+        {error && (
+          <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>Default listing type</Label>
+            <select
+              value={preferences.default_listing_type}
+              onChange={(event) =>
+                setPreferences((current) => ({
+                  ...current,
+                  default_listing_type: event.target.value as ListingType,
+                }))
+              }
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="fixed_price">Fixed price</option>
+              <option value="auction">Auction</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Raw condition fallback</Label>
+            <select
+              value={preferences.default_raw_condition}
+              onChange={(event) =>
+                setPreferences((current) => ({
+                  ...current,
+                  default_raw_condition: event.target.value as CardCondition,
+                }))
+              }
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="NM">NM</option>
+              <option value="LP">LP</option>
+              <option value="MP">MP</option>
+              <option value="HP">HP</option>
+              <option value="DMG">DMG</option>
+            </select>
+          </div>
+        </div>
+
+        <label className="flex items-start gap-3 rounded-lg border p-3 text-sm">
+          <input
+            type="checkbox"
+            checked={preferences.default_batch_fixed_price}
+            onChange={(event) =>
+              setPreferences((current) => ({
+                ...current,
+                default_batch_fixed_price: event.target.checked,
+              }))
+            }
+            className="mt-1 size-4 accent-primary"
+          />
+          <span>
+            <span className="font-medium">Batch drafts default to fixed price</span>
+            <span className="block text-muted-foreground">
+              Recommended for the beta because eBay fixed-price listings use GTC and avoid invalid auction duration errors.
+            </span>
+          </span>
+        </label>
+
+        <label className="flex items-start gap-3 rounded-lg border p-3 text-sm">
+          <input
+            type="checkbox"
+            checked={preferences.price_rounding_enabled}
+            onChange={(event) =>
+              setPreferences((current) => ({
+                ...current,
+                price_rounding_enabled: event.target.checked,
+              }))
+            }
+            className="mt-1 size-4 accent-primary"
+          />
+          <span>
+            <span className="font-medium">Use smart CAD price rounding</span>
+            <span className="block text-muted-foreground">
+              Under $20 rounds to $0.50, $20-$99.99 rounds to .99, and $100+ rounds to the nearest $5.
+            </span>
+          </span>
+        </label>
+
+        <div className="space-y-1.5">
+          <Label>Description template</Label>
+          <Textarea
+            value={preferences.description_template ?? ""}
+            onChange={(event) =>
+              setPreferences((current) => ({
+                ...current,
+                description_template: event.target.value,
+              }))
+            }
+            rows={4}
+            placeholder="Example: Ships from Canada in a sleeve, top loader, and protective mailer."
+          />
+          <p className="text-xs text-muted-foreground">
+            Autopilot adds this as seller notes under the generated card facts and shipping text.
+          </p>
+        </div>
+
+        <Button onClick={savePreferences} disabled={saving}>
+          {saving ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : null}
+          Save Listing Preferences
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

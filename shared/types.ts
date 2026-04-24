@@ -173,6 +173,91 @@ export interface Listing {
   publish_attempted_at: string | null;
   ebay_error: string | null;
   research_notes: string | null;
+  autopilot_metadata: Record<string, unknown> | null;
+}
+
+// ── Seller Listing Preferences ─────────────────────────
+
+export interface ListingPreference {
+  user_id: string;
+  default_listing_type: ListingType;
+  default_batch_fixed_price: boolean;
+  price_rounding_enabled: boolean;
+  default_raw_condition: CardCondition;
+  description_template: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── Autopilot Batches ─────────────────────────────────
+
+export type ListingBatchStatus = "processing" | "completed" | "error";
+export type ListingBatchItemStatus =
+  | "processing"
+  | "ready"
+  | "needs_review"
+  | "error";
+
+export interface ListingBatchSummaryCounts {
+  total: number;
+  ready: number;
+  needs_review: number;
+  error: number;
+  processing: number;
+}
+
+export interface ListingBatch {
+  id: string;
+  user_id: string;
+  status: ListingBatchStatus;
+  summary_counts: ListingBatchSummaryCounts;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface ListingBatchItem {
+  id: string;
+  batch_id: string;
+  listing_id: string | null;
+  position: number;
+  front_photo_url: string;
+  back_photo_url: string | null;
+  status: ListingBatchItemStatus;
+  confidence_score: number | null;
+  needs_review_reasons: string[];
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+  listing?: Listing | null;
+}
+
+export interface ListingBatchDetail extends ListingBatch {
+  items: ListingBatchItem[];
+}
+
+export interface CreateListingBatchRequest {
+  items: Array<{
+    front_url: string;
+    back_url?: string | null;
+  }>;
+}
+
+export interface BulkPublishRequest {
+  listing_ids: string[];
+  mode: "now" | "scheduled";
+  scheduled_at?: string | null;
+}
+
+export interface BulkPublishListingResult {
+  listing_id: string;
+  status: "blocked" | "publishing" | "published" | "scheduled" | "error";
+  ebay_item_id?: string | number | null;
+  scheduled_at?: string | null;
+  error?: string | null;
+}
+
+export interface BulkPublishResponse {
+  results: BulkPublishListingResult[];
 }
 
 // ── Photos ─────────────────────────────────────────────

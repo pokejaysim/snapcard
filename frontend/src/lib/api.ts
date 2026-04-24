@@ -4,16 +4,30 @@ import {
   DEV_PHOTOS,
   DEV_USAGE,
   DEV_EBAY_PUBLISH_SETTINGS,
+  DEV_USER,
 } from "./devMode";
 import { useAuthStore } from "@/store/auth";
 import {
   CANADA_BETA_CURRENCY_CODE,
   CANADA_BETA_MARKETPLACE_ID,
 } from "../../../shared/types";
+import type { Listing, ListingBatchDetail, ListingPreference } from "../../../shared/types";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3001/api";
 
 let devListingCounter = 0;
+let devBatchCounter = 0;
+const DEV_BATCHES: ListingBatchDetail[] = [];
+let DEV_LISTING_PREFERENCES: ListingPreference = {
+  user_id: DEV_USER.id,
+  default_listing_type: "fixed_price",
+  default_batch_fixed_price: true,
+  price_rounding_enabled: true,
+  default_raw_condition: "NM",
+  description_template: "Thanks for looking. Cards are packed carefully and shipped from Canada.",
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+};
 
 // Mock responses for dev mode so the UI is fully navigable without a backend
 function devMockResponse<T>(path: string, options?: RequestInit): T | null {
@@ -68,6 +82,7 @@ function devMockResponse<T>(path: string, options?: RequestInit): T | null {
       ebay_item_id: null,
       ebay_error: null,
       identified_by: body.identified_by ?? "manual",
+      autopilot_metadata: body.autopilot_metadata ?? null,
     };
     DEV_LISTINGS.unshift(newListing);
     DEV_PHOTOS[id] = [];
@@ -297,6 +312,149 @@ function devMockResponse<T>(path: string, options?: RequestInit): T | null {
     return DEV_EBAY_PUBLISH_SETTINGS as unknown as T;
   }
 
+  if (path === "/account/listing-preferences" && method === "GET") {
+    return DEV_LISTING_PREFERENCES as unknown as T;
+  }
+
+  if (path === "/account/listing-preferences" && method === "PUT") {
+    const body = JSON.parse((options?.body as string) ?? "{}") as Partial<ListingPreference>;
+    DEV_LISTING_PREFERENCES = {
+      ...DEV_LISTING_PREFERENCES,
+      default_listing_type:
+        body.default_listing_type === "auction" ? "auction" : "fixed_price",
+      default_batch_fixed_price:
+        typeof body.default_batch_fixed_price === "boolean"
+          ? body.default_batch_fixed_price
+          : DEV_LISTING_PREFERENCES.default_batch_fixed_price,
+      price_rounding_enabled:
+        typeof body.price_rounding_enabled === "boolean"
+          ? body.price_rounding_enabled
+          : DEV_LISTING_PREFERENCES.price_rounding_enabled,
+      default_raw_condition:
+        body.default_raw_condition ?? DEV_LISTING_PREFERENCES.default_raw_condition,
+      description_template:
+        body.description_template ?? DEV_LISTING_PREFERENCES.description_template,
+      updated_at: new Date().toISOString(),
+    };
+    return DEV_LISTING_PREFERENCES as unknown as T;
+  }
+
+  if (path === "/listing-batches" && method === "POST") {
+    const body = JSON.parse((options?.body as string) ?? "{}") as {
+      items?: Array<{ front_url?: string; back_url?: string | null }>;
+    };
+    const items = body.items ?? [];
+    const batchId = `dev-batch-${++devBatchCounter}`;
+    const batchItems = items.map((item, index) => {
+      const listingId = `dev-autopilot-${++devListingCounter}`;
+      const hasBack = Boolean(item.back_url);
+      const listing: Listing = {
+        id: listingId,
+        user_id: DEV_USER.id,
+        card_name: index % 2 === 0 ? "Charizard" : "Pikachu",
+        set_name: index % 2 === 0 ? "Base Set" : "Vivid Voltage",
+        card_number: index % 2 === 0 ? "4/102" : "044/185",
+        rarity: index % 2 === 0 ? "Holo Rare" : "VMAX",
+        language: "English",
+        condition: "NM",
+        card_game: "pokemon",
+        card_type: "raw" as const,
+        grading_company: null,
+        grade: null,
+        status: "draft",
+        title: index % 2 === 0 ? "Charizard 4/102 Base Set Holo Rare NM" : "Pikachu VMAX 044/185 Vivid Voltage NM",
+        description: "Autopilot generated draft description.",
+        price_cad: index % 2 === 0 ? 89.99 : 14.5,
+        marketplace_id: CANADA_BETA_MARKETPLACE_ID,
+        currency_code: CANADA_BETA_CURRENCY_CODE,
+        listing_type: "fixed_price" as const,
+        duration: 30,
+        ebay_aspects: { Game: "Pokemon TCG", Manufacturer: "Nintendo" },
+        created_at: new Date().toISOString(),
+        published_at: null,
+        scheduled_at: null,
+        publish_started_at: null,
+        publish_attempted_at: null,
+        ebay_item_id: null,
+        ebay_error: null,
+        identified_by: "ai",
+        photo_urls: [item.front_url, item.back_url].filter((url): url is string => Boolean(url)),
+        research_notes: null,
+        autopilot_metadata: {
+          identification: { confidence: hasBack ? 0.94 : 0.78 },
+          pricing: { rounded_price_cad: index % 2 === 0 ? 89.99 : 14.5 },
+        },
+      };
+      DEV_LISTINGS.unshift(listing as unknown as (typeof DEV_LISTINGS)[number]);
+      DEV_PHOTOS[listingId] = [
+        { id: `${listingId}-front`, file_url: item.front_url ?? "", ebay_url: null, position: 1 },
+        ...(item.back_url
+          ? [{ id: `${listingId}-back`, file_url: item.back_url, ebay_url: null, position: 2 }]
+          : []),
+      ];
+      return {
+        id: `${batchId}-item-${String(index + 1)}`,
+        batch_id: batchId,
+        listing_id: listingId,
+        position: index + 1,
+        front_photo_url: item.front_url ?? "",
+        back_photo_url: item.back_url ?? null,
+        status: hasBack ? "ready" as const : "needs_review" as const,
+        confidence_score: hasBack ? 0.94 : 0.78,
+        needs_review_reasons: hasBack ? [] : ["Back photo is missing.", "AI identification confidence is below 85%; review the card details."],
+        error: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        listing,
+      };
+    });
+    const batch: ListingBatchDetail = {
+      id: batchId,
+      user_id: DEV_USER.id,
+      status: "completed",
+      summary_counts: {
+        total: batchItems.length,
+        ready: batchItems.filter((item) => item.status === "ready").length,
+        needs_review: batchItems.filter((item) => item.status === "needs_review").length,
+        error: 0,
+        processing: 0,
+      },
+      created_at: new Date().toISOString(),
+      completed_at: new Date().toISOString(),
+      items: batchItems,
+    };
+    DEV_BATCHES.unshift(batch);
+    return batch as unknown as T;
+  }
+
+  const batchMatch = path.match(/^\/listing-batches\/([\w-]+)$/);
+  if (batchMatch && method === "GET") {
+    const batch = DEV_BATCHES.find((item) => item.id === batchMatch[1]);
+    if (!batch) throw new Error("Listing batch not found");
+    batch.items = batch.items.map((item) => ({
+      ...item,
+      listing: DEV_LISTINGS.find((listing) => listing.id === item.listing_id) as typeof item.listing,
+    }));
+    return batch as unknown as T;
+  }
+
+  if (path === "/listings/bulk-publish" && method === "POST") {
+    const body = JSON.parse((options?.body as string) ?? "{}") as {
+      listing_ids?: string[];
+    };
+    const results = (body.listing_ids ?? []).map((listingId) => {
+      const listing = DEV_LISTINGS.find((item) => item.id === listingId);
+      if (!listing) {
+        return { listing_id: listingId, status: "error" as const, error: "Listing not found" };
+      }
+      listing.status = "published";
+      listing.published_at = new Date().toISOString();
+      listing.ebay_item_id = `MOCK-${Date.now()}`;
+      return { listing_id: listingId, status: "published" as const, ebay_item_id: listing.ebay_item_id };
+    });
+    return { results } as unknown as T;
+  }
+
   const readinessMatch = path.match(/^\/listings\/([\w-]+)\/publish-readiness$/);
   if (readinessMatch && method === "GET") {
     const listing = DEV_LISTINGS.find((item) => item.id === readinessMatch[1]);
@@ -510,6 +668,11 @@ export async function apiUpload<T>(
   formData: FormData,
 ): Promise<T> {
   if (DEV_MODE) {
+    if (path === "/photos/upload") {
+      return {
+        url: `https://placehold.co/400x560/1f2937/ffffff?text=Uploaded+${String(Date.now())}`,
+      } as unknown as T;
+    }
     return { id: "dev-photo", file_url: "https://placeholder.dev/photo.jpg" } as unknown as T;
   }
 

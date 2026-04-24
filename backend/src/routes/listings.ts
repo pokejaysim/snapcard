@@ -515,6 +515,82 @@ router.get("/listings/:id/photos", requireAuth, async (req, res) => {
   res.json(photos ?? []);
 });
 
+// ── Bulk publish ready listings ───────────────────────
+
+router.post("/listings/bulk-publish", requireAuth, async (req, res) => {
+  const authReq = req as AuthenticatedRequest;
+  const body = req.body as {
+    listing_ids?: unknown;
+    mode?: PublishMode;
+    scheduled_at?: string | null;
+  };
+
+  const listingIds = Array.isArray(body.listing_ids)
+    ? body.listing_ids.filter((id): id is string => typeof id === "string")
+    : [];
+  const mode: PublishMode = body.mode === "scheduled" ? "scheduled" : "now";
+
+  if (listingIds.length === 0) {
+    res.status(400).json({ error: "listing_ids must include at least one listing." });
+    return;
+  }
+
+  if (listingIds.length > 50) {
+    res.status(400).json({ error: "Bulk publish is limited to 50 listings at a time." });
+    return;
+  }
+
+  if (mode === "scheduled") {
+    const scheduledAt = body.scheduled_at ? new Date(body.scheduled_at) : null;
+    if (!scheduledAt || Number.isNaN(scheduledAt.getTime()) || scheduledAt.getTime() <= Date.now()) {
+      res.status(400).json({
+        error: "Choose a valid future publish date/time before scheduling.",
+        code: "PUBLISH_ERROR",
+      });
+      return;
+    }
+  }
+
+  const results = [];
+  for (const listingId of Array.from(new Set(listingIds))) {
+    try {
+      const readiness = await getPublishReadiness(listingId, authReq.userId);
+      if (!readiness.ready) {
+        results.push({
+          listing_id: listingId,
+          status: "blocked",
+          error: readiness.missing.map((entry) => entry.message).join(" "),
+        });
+        continue;
+      }
+
+      const result = await requestPublish(listingId, authReq.userId, {
+        mode,
+        scheduled_at: body.scheduled_at,
+      });
+
+      results.push({
+        listing_id: listingId,
+        status: result.ok ? result.status ?? "publishing" : "error",
+        ebay_item_id: result.ebay_item_id,
+        scheduled_at: result.scheduled_at,
+        error: result.error ?? null,
+      });
+    } catch (error) {
+      results.push({
+        listing_id: listingId,
+        status: "error",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to publish listing.",
+      });
+    }
+  }
+
+  res.json({ results });
+});
+
 // ── Publish listing to eBay ────────────────────────────
 
 router.post("/listings/:id/publish", requireAuth, async (req, res) => {

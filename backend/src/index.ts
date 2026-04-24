@@ -9,6 +9,7 @@ import cardsRouter from "./routes/cards.js";
 import cardSearchRouter from "./routes/cardSearch.js";
 import pricingRouter from "./routes/pricing.js";
 import accountRouter from "./routes/account.js";
+import listingBatchesRouter from "./routes/listingBatches.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { publishQueue } from "./lib/queue.js";
 import { processPublishJob } from "./jobs/publishListing.js";
@@ -51,6 +52,7 @@ app.use("/api", cardsRouter);
 app.use("/api", cardSearchRouter);
 app.use("/api", pricingRouter);
 app.use("/api", accountRouter);
+app.use("/api", listingBatchesRouter);
 
 // Error handling
 app.use(errorHandler);
