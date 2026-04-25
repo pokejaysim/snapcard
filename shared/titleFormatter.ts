@@ -1,10 +1,10 @@
-interface TitleInput {
+export interface TitleFormatInput {
   card_name: string;
-  card_number: string | null;
-  set_name: string | null;
-  rarity: string | null;
-  condition: string | null;
-  language: string | null;
+  card_number?: string | null;
+  set_name?: string | null;
+  rarity?: string | null;
+  condition?: string | null;
+  language?: string | null;
   card_type?: "raw" | "graded" | null;
   grading_company?: string | null;
   grade?: string | null;
@@ -29,7 +29,7 @@ const SET_YEAR_HINTS: Array<{ pattern: RegExp; year: string }> = [
   { pattern: /base set/i, year: "1999" },
 ];
 
-export function generateTitle(input: TitleInput): string {
+export function formatEbayTitle(input: TitleFormatInput): string {
   const year = normalizeText(input.year) ?? inferYearFromSet(input.set_name);
   const language = normalizeText(input.language);
   const setName = normalizeText(input.set_name);
@@ -55,7 +55,7 @@ export function generateTitle(input: TitleInput): string {
   return trimTitle(title);
 }
 
-function formatConditionOrGrade(input: TitleInput): string | null {
+function formatConditionOrGrade(input: TitleFormatInput): string | null {
   if (input.card_type === "graded") {
     const gradingCompany = normalizeText(input.grading_company);
     const grade = normalizeText(input.grade);

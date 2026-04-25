@@ -22,6 +22,7 @@ import {
   Search,
 } from "lucide-react";
 import type { PokemonTcgCardDetail } from "../../../shared/types";
+import { formatEbayTitle } from "../../../shared/titleFormatter";
 import {
   CANADA_BETA_CURRENCY_CODE,
   CANADA_BETA_MARKETPLACE_ID,
@@ -213,17 +214,7 @@ export default function CreateListing() {
       return;
     }
     setError("");
-    const parts = [card.card_name];
-    if (card.card_number) parts.push(card.card_number);
-    if (card.set_name) parts.push(card.set_name);
-    if (card.card_type === "graded") {
-      if (card.grading_company) parts.push(card.grading_company);
-      if (card.grade) parts.push(card.grade);
-    }
-    if (card.rarity) parts.push(card.rarity);
-    if (card.card_type === "raw" && card.condition) parts.push(card.condition);
-    if (card.language && card.language !== "English") parts.push(card.language);
-    setGeneratedTitle(parts.join(" ").slice(0, 80));
+    setGeneratedTitle(formatEbayTitle(card));
 
     const gradeOrCondition = card.card_type === "graded"
       ? `${card.grading_company} ${card.grade}`
