@@ -185,6 +185,7 @@ export interface ListingPreference {
   price_rounding_enabled: boolean;
   default_raw_condition: CardCondition;
   description_template: string | null;
+  description_template_html: string | null;
   created_at: string;
   updated_at: string;
 }

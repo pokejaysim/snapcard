@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
 import { DEV_MODE, DEV_PHOTOS } from "@/lib/devMode";
+import { sanitizeDescriptionPreviewHtml } from "@/lib/descriptionTemplatePreview";
 import {
   ArrowLeft,
   Loader2,
@@ -21,6 +22,7 @@ import {
   Link,
   Settings2,
   CalendarClock,
+  RefreshCw,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { EbayPublishReadiness } from "../../../shared/types";
@@ -110,6 +112,7 @@ export default function ListingDetail() {
   const [saving, setSaving] = useState(false);
   const [savingAspects, setSavingAspects] = useState(false);
   const [savingQuickCondition, setSavingQuickCondition] = useState(false);
+  const [regeneratingDescription, setRegeneratingDescription] = useState(false);
   const [error, setError] = useState("");
   const [publishMode, setPublishMode] = useState<PublishMode>("now");
   const [scheduledAtLocal, setScheduledAtLocal] = useState(
@@ -369,6 +372,28 @@ export default function ListingDetail() {
       setError(err instanceof Error ? err.message : "Failed to save eBay details");
     } finally {
       setSavingAspects(false);
+    }
+  }
+
+  async function handleRegenerateDescription() {
+    if (!id) return;
+
+    setRegeneratingDescription(true);
+    setError("");
+
+    try {
+      await apiFetch(`/listings/${id}/generate`, { method: "POST" });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["listing", id] }),
+        queryClient.invalidateQueries({ queryKey: ["listings"] }),
+        queryClient.invalidateQueries({ queryKey: ["publish-readiness", id] }),
+      ]);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to regenerate description",
+      );
+    } finally {
+      setRegeneratingDescription(false);
     }
   }
 
@@ -1048,6 +1073,45 @@ export default function ListingDetail() {
               >
                 {listing.ebay_item_id}
               </a>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Description */}
+      <Card className="mb-4">
+        <CardHeader>
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="text-base">eBay Description</CardTitle>
+            {(isDraft || isError) && !editing && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleRegenerateDescription}
+                disabled={regeneratingDescription}
+              >
+                {regeneratingDescription ? (
+                  <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-1.5 size-3.5" />
+                )}
+                Regenerate from template
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {listing.description ? (
+            <div
+              className="max-h-[28rem] overflow-auto rounded-lg border bg-white p-3 text-sm text-slate-900"
+              dangerouslySetInnerHTML={{
+                __html: sanitizeDescriptionPreviewHtml(listing.description),
+              }}
+            />
+          ) : (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              No eBay description yet. Regenerate after saving card details, or add an HTML template in Account.
             </div>
           )}
         </CardContent>

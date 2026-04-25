@@ -3,7 +3,7 @@ import multer from "multer";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
 import { supabase } from "../lib/supabase.js";
 import { generateTitle } from "../services/titleGenerator.js";
-import { generateDescription } from "../services/descriptionGenerator.js";
+import { buildListingDescription } from "../services/descriptionBuilder.js";
 import { requestPublish, type PublishMode } from "../services/ebay/publish.js";
 import { getPublishReadiness } from "../services/ebay/readiness.js";
 import { uploadPhoto } from "../services/storage.js";
@@ -155,7 +155,8 @@ router.post("/listings", requireAuth, async (req, res) => {
     grade: body.grade ?? null,
   });
 
-  const description = generateDescription({
+  const description = await buildListingDescription(authReq.userId, {
+    title,
     card_name: body.card_name,
     set_name: body.set_name ?? null,
     card_number: body.card_number ?? null,
@@ -165,6 +166,7 @@ router.post("/listings", requireAuth, async (req, res) => {
     card_type: isGraded ? "graded" : "raw",
     grading_company: body.grading_company ?? null,
     grade: body.grade ?? null,
+    price_cad: body.price_cad ?? null,
   });
 
   const { data, error } = await supabase
@@ -275,7 +277,7 @@ router.put("/listings/:id", requireAuth, async (req, res) => {
   // Allow draft/error edits so users can recover failed eBay validations.
   const { data: existing } = await supabase
     .from("listings")
-    .select("status, listing_type, duration")
+    .select("*")
     .eq("id", req.params.id)
     .eq("user_id", authReq.userId)
     .single();
@@ -291,8 +293,20 @@ router.put("/listings/:id", requireAuth, async (req, res) => {
   }
 
   // If card details changed, regenerate title/description
-  const cardFields = ["card_name", "set_name", "card_number", "rarity", "condition", "language"];
+  const cardFields = [
+    "card_name",
+    "set_name",
+    "card_number",
+    "rarity",
+    "condition",
+    "language",
+    "card_type",
+    "grading_company",
+    "grade",
+  ];
   const hasCardChanges = cardFields.some((f) => f in body);
+  const hasDescriptionChanges =
+    hasCardChanges || "title" in body || "price_cad" in body;
 
   const updates: Record<string, unknown> = { ...body };
 
@@ -315,23 +329,46 @@ router.put("/listings/:id", requireAuth, async (req, res) => {
     updates.currency_code = CANADA_BETA_CURRENCY_CODE;
   }
 
-  if (hasCardChanges && typeof body.card_name === "string") {
-    updates.title = generateTitle({
-      card_name: body.card_name as string,
-      card_number: (body.card_number as string) ?? null,
-      set_name: (body.set_name as string) ?? null,
-      rarity: (body.rarity as string) ?? null,
-      condition: (body.condition as string) ?? null,
-      language: (body.language as string) ?? null,
-    });
+  if (hasDescriptionChanges) {
+    const merged = {
+      ...(existing as Record<string, unknown>),
+      ...body,
+      ...updates,
+    };
+    const isMergedGraded = merged.card_type === "graded";
 
-    updates.description = generateDescription({
-      card_name: body.card_name as string,
-      set_name: (body.set_name as string) ?? null,
-      card_number: (body.card_number as string) ?? null,
-      rarity: (body.rarity as string) ?? null,
-      condition: (body.condition as string) ?? null,
-      language: (body.language as string) ?? null,
+    const nextTitle = hasCardChanges
+      ? generateTitle({
+          card_name: String(merged.card_name ?? ""),
+          card_number: (merged.card_number as string | null) ?? null,
+          set_name: (merged.set_name as string | null) ?? null,
+          rarity: (merged.rarity as string | null) ?? null,
+          condition: isMergedGraded ? null : ((merged.condition as string | null) ?? null),
+          language: (merged.language as string | null) ?? null,
+          card_type: isMergedGraded ? "graded" : "raw",
+          grading_company: (merged.grading_company as string | null) ?? null,
+          grade: (merged.grade as string | null) ?? null,
+        })
+      : typeof merged.title === "string"
+        ? merged.title
+        : null;
+
+    if (hasCardChanges) {
+      updates.title = nextTitle;
+    }
+
+    updates.description = await buildListingDescription(authReq.userId, {
+      title: nextTitle,
+      card_name: String(merged.card_name ?? ""),
+      set_name: (merged.set_name as string | null) ?? null,
+      card_number: (merged.card_number as string | null) ?? null,
+      rarity: (merged.rarity as string | null) ?? null,
+      condition: isMergedGraded ? null : ((merged.condition as string | null) ?? null),
+      language: (merged.language as string | null) ?? null,
+      card_type: isMergedGraded ? "graded" : "raw",
+      grading_company: (merged.grading_company as string | null) ?? null,
+      grade: (merged.grade as string | null) ?? null,
+      price_cad: (merged.price_cad as number | string | null) ?? null,
     });
   }
 
@@ -400,17 +437,25 @@ router.post("/listings/:id/generate", requireAuth, async (req, res) => {
     card_number: listing.card_number as string | null,
     set_name: listing.set_name as string | null,
     rarity: listing.rarity as string | null,
-    condition: listing.condition as string | null,
+    condition: listing.card_type === "graded" ? null : (listing.condition as string | null),
     language: listing.language as string | null,
+    card_type: listing.card_type === "graded" ? "graded" : "raw",
+    grading_company: listing.grading_company as string | null,
+    grade: listing.grade as string | null,
   });
 
-  const description = generateDescription({
+  const description = await buildListingDescription(authReq.userId, {
+    title,
     card_name: listing.card_name as string,
     set_name: listing.set_name as string | null,
     card_number: listing.card_number as string | null,
     rarity: listing.rarity as string | null,
     condition: listing.condition as string | null,
     language: listing.language as string | null,
+    card_type: listing.card_type === "graded" ? "graded" : "raw",
+    grading_company: listing.grading_company as string | null,
+    grade: listing.grade as string | null,
+    price_cad: listing.price_cad as number | null,
   });
 
   const { data, error } = await supabase

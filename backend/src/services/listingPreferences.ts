@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase.js";
+import { sanitizeDescriptionHtml } from "./descriptionTemplateRenderer.js";
 
 export type ListingType = "auction" | "fixed_price";
 export type RawCondition = "NM" | "LP" | "MP" | "HP" | "DMG";
@@ -10,6 +11,7 @@ export interface ListingPreferences {
   price_rounding_enabled: boolean;
   default_raw_condition: RawCondition;
   description_template: string | null;
+  description_template_html: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -20,6 +22,7 @@ export interface ListingPreferencesInput {
   price_rounding_enabled?: unknown;
   default_raw_condition?: unknown;
   description_template?: unknown;
+  description_template_html?: unknown;
 }
 
 export function defaultListingPreferences(userId: string): ListingPreferences {
@@ -32,6 +35,7 @@ export function defaultListingPreferences(userId: string): ListingPreferences {
     default_raw_condition: "NM",
     description_template:
       "Thanks for looking. Cards are packed carefully and shipped from Canada.",
+    description_template_html: null,
     created_at: now,
     updated_at: now,
   };
@@ -77,6 +81,7 @@ export async function saveListingPreferences(
       price_rounding_enabled: updates.price_rounding_enabled,
       default_raw_condition: updates.default_raw_condition,
       description_template: updates.description_template,
+      description_template_html: updates.description_template_html,
       updated_at: updates.updated_at,
     })
     .select()
@@ -115,6 +120,11 @@ function normalizeListingPreferences(
       typeof row.description_template === "string" &&
       row.description_template.trim()
         ? row.description_template.trim()
+        : null,
+    description_template_html:
+      typeof row.description_template_html === "string" &&
+      row.description_template_html.trim()
+        ? sanitizeDescriptionHtml(row.description_template_html.trim()).trim() || null
         : null,
     created_at:
       typeof row.created_at === "string" ? row.created_at : defaults.created_at,

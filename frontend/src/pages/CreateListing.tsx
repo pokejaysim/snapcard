@@ -4,7 +4,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PhotoUploader, type PhotoFile } from "@/components/PhotoUploader";
@@ -12,6 +11,10 @@ import { PricingSuggestion } from "@/components/PricingSuggestion";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { apiFetch, apiUpload } from "@/lib/api";
 import { CardSearch } from "@/components/CardSearch";
+import {
+  fallbackDescriptionPreview,
+  renderDescriptionTemplatePreview,
+} from "@/lib/descriptionTemplatePreview";
 import {
   ArrowLeft,
   ArrowRight,
@@ -28,7 +31,7 @@ import {
   CANADA_BETA_MARKETPLACE_ID,
   EBAY_MARKETPLACE_CONFIG,
 } from "../../../shared/types";
-import type { UsageInfo } from "../../../shared/types";
+import type { ListingPreference, UsageInfo } from "../../../shared/types";
 
 type Step = "photos" | "search" | "identify" | "details" | "pricing" | "preview";
 
@@ -80,6 +83,11 @@ export default function CreateListing() {
     queryFn: () => apiFetch<UsageInfo>("/account/usage"),
   });
 
+  const { data: listingPreferences } = useQuery({
+    queryKey: ["listing-preferences"],
+    queryFn: () => apiFetch<ListingPreference>("/account/listing-preferences"),
+  });
+
   const [card, setCard] = useState<CardDetails>({
     card_name: "",
     set_name: "",
@@ -94,13 +102,18 @@ export default function CreateListing() {
   });
 
   const [generatedTitle, setGeneratedTitle] = useState("");
-  const [generatedDescription, setGeneratedDescription] = useState("");
   const [listingType, setListingType] = useState<"auction" | "fixed_price">(
     "auction"
   );
   const [price, setPrice] = useState("");
 
   const currentStepIndex = STEPS.findIndex((s) => s.key === step);
+  const descriptionPreviewHtml = buildCreateDescriptionPreview(
+    generatedTitle,
+    card,
+    price,
+    listingPreferences,
+  );
 
   // ── Step 1 → 2: Upload photos, then identify ────────
 
@@ -215,13 +228,6 @@ export default function CreateListing() {
     }
     setError("");
     setGeneratedTitle(formatEbayTitle(card));
-
-    const gradeOrCondition = card.card_type === "graded"
-      ? `${card.grading_company} ${card.grade}`
-      : `Condition: ${card.condition ?? "NM"}`;
-    setGeneratedDescription(
-      `${card.card_name} — ${card.set_name ?? ""} ${card.card_number ?? ""} — ${gradeOrCondition}`
-    );
     setStep("preview");
   }
 
@@ -770,15 +776,16 @@ export default function CreateListing() {
               </div>
 
               {/* Description preview */}
-              <div className="space-y-1">
-                <Label>Description</Label>
-                <Textarea
-                  value={generatedDescription}
-                  onChange={(e) => setGeneratedDescription(e.target.value)}
-                  rows={3}
+              <div className="space-y-2">
+                <Label>eBay Description Preview</Label>
+                <div
+                  className="max-h-96 overflow-auto rounded-md border bg-white p-3 text-sm text-slate-900"
+                  dangerouslySetInnerHTML={{ __html: descriptionPreviewHtml }}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Full HTML description will be generated on save
+                  {listingPreferences?.description_template_html?.trim()
+                    ? "This preview uses your saved Account HTML template filled with this card's details."
+                    : "No full HTML template is saved yet, so SnapCard will use its default generated description."}
                 </p>
               </div>
 
@@ -826,4 +833,36 @@ export default function CreateListing() {
       )}
     </div>
   );
+}
+
+function buildCreateDescriptionPreview(
+  title: string,
+  card: CardDetails,
+  price: string,
+  preferences?: ListingPreference,
+): string {
+  const previewInput = {
+    title,
+    card_name: card.card_name || "Pokemon Card",
+    set_name: card.set_name || null,
+    card_number: card.card_number || null,
+    rarity: card.rarity || null,
+    language: card.language || "English",
+    condition: card.card_type === "raw" ? card.condition || "NM" : null,
+    card_type: card.card_type,
+    grading_company:
+      card.card_type === "graded" ? card.grading_company || null : null,
+    grade: card.card_type === "graded" ? card.grade || null : null,
+    price_cad: price ? Number(price) : null,
+    seller_location: "Your saved eBay location",
+    shipping_summary: "Ships from Canada using your saved SnapCard/eBay defaults.",
+    returns_summary: "Uses your saved SnapCard/eBay return defaults.",
+  };
+
+  return preferences?.description_template_html?.trim()
+    ? renderDescriptionTemplatePreview(
+        preferences.description_template_html,
+        previewInput,
+      )
+    : fallbackDescriptionPreview(previewInput);
 }

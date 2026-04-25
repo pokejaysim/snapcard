@@ -1,6 +1,6 @@
 import { supabase } from "../lib/supabase.js";
 import { identifyCard, type CardIdentificationResult } from "./claude/vision.js";
-import { generateDescription } from "./descriptionGenerator.js";
+import { buildListingDescription } from "./descriptionBuilder.js";
 import { getPublishReadiness } from "./ebay/readiness.js";
 import {
   CANADA_BETA_CURRENCY_CODE,
@@ -112,35 +112,6 @@ function normalizeGradingCompany(value: string | null): string | null {
   const upper = trimmed.toUpperCase();
   if (["PSA", "BGS", "CGC", "SGC"].includes(upper)) return upper;
   return "other";
-}
-
-function buildDescriptionWithTemplate(
-  identification: CardIdentificationResult,
-  preferences: ListingPreferences,
-): string {
-  const baseDescription = generateDescription({
-    card_name: identification.card_name,
-    set_name: identification.set_name || null,
-    card_number: identification.card_number || null,
-    rarity: identification.rarity || null,
-    condition: identification.card_type === "graded" ? null : identification.condition,
-    language: identification.language || "English",
-    card_type: identification.card_type,
-    grading_company: identification.grading_company,
-    grade: identification.grade,
-  });
-
-  if (!preferences.description_template) {
-    return baseDescription;
-  }
-
-  return `${baseDescription}
-<div style="font-family: Arial, sans-serif; max-width: 800px; margin: 12px auto 0; padding: 0 16px 16px;">
-  <div style="background: #fff7ed; border-radius: 8px; padding: 16px;">
-    <h3 style="margin: 0 0 8px; color: #333;">Seller Notes</h3>
-    <p style="margin: 0; color: #555;">${escapeHtml(preferences.description_template)}</p>
-  </div>
-</div>`;
 }
 
 function priceChartingCadForIdentification(
@@ -573,6 +544,19 @@ async function insertAutopilotListing(input: {
   const photoUrls = [input.frontUrl, input.backUrl].filter(
     (url): url is string => Boolean(url),
   );
+  const description = await buildListingDescription(input.userId, {
+    title,
+    card_name: input.identification.card_name,
+    set_name: input.identification.set_name || null,
+    card_number: input.identification.card_number || null,
+    rarity: input.identification.rarity || null,
+    condition: isGraded ? null : input.identification.condition,
+    language: input.identification.language || "English",
+    card_type: input.identification.card_type,
+    grading_company: input.identification.grading_company,
+    grade: input.identification.grade,
+    price_cad: input.pricing.suggested_price_cad,
+  });
 
   const { data, error } = await supabase
     .from("listings")
@@ -591,10 +575,7 @@ async function insertAutopilotListing(input: {
       grade: input.identification.grade,
       identified_by: "ai",
       title,
-      description: buildDescriptionWithTemplate(
-        input.identification,
-        input.preferences,
-      ),
+      description,
       price_cad: input.pricing.suggested_price_cad,
       marketplace_id: CANADA_BETA_MARKETPLACE_ID,
       currency_code: CANADA_BETA_CURRENCY_CODE,
@@ -703,12 +684,4 @@ function normalizeStringArray(input: unknown): string[] {
 
 function numberOrZero(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }

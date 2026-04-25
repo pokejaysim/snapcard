@@ -14,6 +14,11 @@ import {
 import { apiFetch } from "@/lib/api";
 import { EbayPublishSetupCard } from "@/components/EbayPublishSetupCard";
 import {
+  DESCRIPTION_TEMPLATE_PLACEHOLDERS,
+  fallbackDescriptionPreview,
+  renderDescriptionTemplatePreview,
+} from "@/lib/descriptionTemplatePreview";
+import {
   ExternalLink,
   CheckCircle2,
   Circle,
@@ -219,6 +224,7 @@ function ListingPreferencesCard({
           price_rounding_enabled: preferences.price_rounding_enabled,
           default_raw_condition: preferences.default_raw_condition,
           description_template: preferences.description_template,
+          description_template_html: preferences.description_template_html,
         }),
       });
       setPreferences(saved);
@@ -329,7 +335,52 @@ function ListingPreferencesCard({
         </label>
 
         <div className="space-y-1.5">
-          <Label>Description template</Label>
+          <Label>eBay HTML description template</Label>
+          <Textarea
+            value={preferences.description_template_html ?? ""}
+            onChange={(event) =>
+              setPreferences((current) => ({
+                ...current,
+                description_template_html: event.target.value,
+              }))
+            }
+            rows={10}
+            className="font-mono text-xs"
+            placeholder={`Paste your eBay HTML here. Example: <h2>{{title}}</h2><p>{{condition_description}}</p>`}
+          />
+          <p className="text-xs text-muted-foreground">
+            SnapCard fills placeholders from the card and seller setup. Unsafe eBay HTML like scripts, forms, iframes, JavaScript links, and click handlers is removed.
+          </p>
+          <div className="rounded-lg border bg-muted/30 p-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Placeholder cheat sheet
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {DESCRIPTION_TEMPLATE_PLACEHOLDERS.map((placeholder) => (
+                <code
+                  key={placeholder}
+                  className="rounded bg-background px-1.5 py-0.5 text-[11px]"
+                >
+                  {`{{${placeholder}}}`}
+                </code>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2 rounded-lg border p-3">
+            <p className="text-sm font-medium">Sample rendered preview</p>
+            <div
+              className="max-h-96 overflow-auto rounded-md bg-white p-3 text-sm text-slate-900"
+              dangerouslySetInnerHTML={{
+                __html: buildSampleDescriptionPreview(
+                  preferences.description_template_html,
+                ),
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Seller notes fallback</Label>
           <Textarea
             value={preferences.description_template ?? ""}
             onChange={(event) =>
@@ -342,7 +393,7 @@ function ListingPreferencesCard({
             placeholder="Example: Ships from Canada in a sleeve, top loader, and protective mailer."
           />
           <p className="text-xs text-muted-foreground">
-            Autopilot adds this as seller notes under the generated card facts and shipping text.
+            Used only when no full HTML template is saved. Existing seller notes stay compatible.
           </p>
         </div>
 
@@ -353,4 +404,28 @@ function ListingPreferencesCard({
       </CardContent>
     </Card>
   );
+}
+
+function buildSampleDescriptionPreview(templateHtml?: string | null): string {
+  const sample = {
+    title: "2025 Pokemon Prismatic Evolutions Fan Rotom #085/131 Holo Rare - NM",
+    card_name: "Fan Rotom",
+    set_name: "Prismatic Evolutions",
+    card_number: "085/131",
+    rarity: "Holo Rare",
+    language: "English",
+    condition: "NM",
+    card_type: "raw",
+    grading_company: null,
+    grade: null,
+    price_cad: 5,
+    seller_location: "Vancouver, BC V5K 0A1",
+    shipping_summary:
+      "Ships from Canada via Canada Post Lettermail within 2 business days. Shipping cost: $2.50 CAD.",
+    returns_summary: "30-day returns accepted. Buyer pays return shipping.",
+  };
+
+  return templateHtml?.trim()
+    ? renderDescriptionTemplatePreview(templateHtml, sample)
+    : fallbackDescriptionPreview(sample);
 }

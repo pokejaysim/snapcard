@@ -1,4 +1,4 @@
-interface DescriptionInput {
+export interface DescriptionInput {
   card_name: string;
   set_name: string | null;
   card_number: string | null;
@@ -10,20 +10,24 @@ interface DescriptionInput {
   grade?: string | null;
 }
 
+export function getConditionDescription(condition: string | null): string {
+  const conditionDescriptions: Record<string, string> = {
+    NM: "Near Mint - Minimal to no wear. Card is in excellent condition.",
+    LP: "Light Play - Minor edge or corner wear. No major creases.",
+    MP: "Moderate Play - Noticeable wear on edges and corners. May have light scratches.",
+    HP: "Heavy Play - Significant wear. May have creases, bends, or surface damage.",
+    DMG: "Damaged - Major damage such as tears, heavy creases, or water damage.",
+  };
+
+  return condition
+    ? conditionDescriptions[condition] ?? condition
+    : "See photos for condition";
+}
+
 export function generateDescription(input: DescriptionInput): string {
   const isGraded = input.card_type === "graded";
 
-  const conditionDescriptions: Record<string, string> = {
-    NM: "Near Mint — Minimal to no wear. Card is in excellent condition.",
-    LP: "Light Play — Minor edge or corner wear. No major creases.",
-    MP: "Moderate Play — Noticeable wear on edges and corners. May have light scratches.",
-    HP: "Heavy Play — Significant wear. May have creases, bends, or surface damage.",
-    DMG: "Damaged — Major damage such as tears, heavy creases, or water damage.",
-  };
-
-  const conditionText = input.condition
-    ? conditionDescriptions[input.condition] ?? input.condition
-    : "See photos for condition";
+  const conditionText = getConditionDescription(input.condition);
 
   // Build the grading or condition rows
   let gradingRows = "";
