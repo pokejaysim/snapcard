@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +26,7 @@ import {
   Loader2,
   Crown,
   AlertTriangle,
+  Upload,
 } from "lucide-react";
 import type { CardCondition, ListingPreference, ListingType, UsageInfo } from "../../../shared/types";
 
@@ -206,6 +207,10 @@ function ListingPreferencesCard({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const htmlFileInputRef = useRef<HTMLInputElement>(null);
+  const templateLooksLikePlainText = looksLikeRenderedTemplateText(
+    preferences.description_template_html,
+  );
 
   useEffect(() => {
     setPreferences(initialPreferences);
@@ -235,6 +240,34 @@ function ListingPreferencesCard({
       setError(saveError instanceof Error ? saveError.message : "Could not save listing preferences.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function importHtmlTemplate(
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setError("");
+    setMessage("");
+
+    try {
+      const text = await file.text();
+      if (!text.trim()) {
+        setError("That HTML file is empty.");
+        return;
+      }
+
+      setPreferences((current) => ({
+        ...current,
+        description_template_html: text,
+      }));
+      setMessage("HTML template imported. Review the preview, then save.");
+    } catch {
+      setError("Could not read that HTML file. Try opening it in a code editor and copying the raw HTML.");
+    } finally {
+      event.target.value = "";
     }
   }
 
@@ -356,6 +389,27 @@ function ListingPreferencesCard({
 
         <div className="space-y-1.5">
           <Label>eBay HTML description template</Label>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              ref={htmlFileInputRef}
+              type="file"
+              accept=".html,.htm,text/html"
+              onChange={(event) => void importHtmlTemplate(event)}
+              className="hidden"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => htmlFileInputRef.current?.click()}
+            >
+              <Upload className="mr-1.5 size-4" />
+              Import HTML file
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              Best option: choose the .html file directly so SnapCard reads the raw code.
+            </span>
+          </div>
           <Textarea
             value={preferences.description_template_html ?? ""}
             onChange={(event) =>
@@ -368,6 +422,12 @@ function ListingPreferencesCard({
             className="font-mono text-xs"
             placeholder={`Paste your eBay HTML here. Example: <h2>{{title}}</h2><p>{{condition_description}}</p>`}
           />
+          {templateLooksLikePlainText && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              This looks like rendered text, not raw HTML. Use Import HTML file,
+              or paste code that starts with a tag like {"<div style=\"...\">"}.
+            </div>
+          )}
           <p className="text-xs text-muted-foreground">
             SnapCard fills placeholders from the card and seller setup. Unsafe eBay HTML like scripts, forms, iframes, JavaScript links, and click handlers is removed.
           </p>
@@ -424,6 +484,18 @@ function ListingPreferencesCard({
         </Button>
       </CardContent>
     </Card>
+  );
+}
+
+function looksLikeRenderedTemplateText(templateHtml?: string | null): boolean {
+  const text = templateHtml?.trim();
+  if (!text) return false;
+
+  const hasHtmlTag = /<[a-zA-Z][\s\S]*>/.test(text);
+  if (hasHtmlTag) return false;
+
+  return /\b(AUTHENTICATED|SPECIFICATIONS|CONDITION NOTES|RETURNS|ABOUT PJS COLLECTIBLES)\b/i.test(
+    text,
   );
 }
 
