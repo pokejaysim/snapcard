@@ -1,6 +1,11 @@
 import { Router } from "express";
 import multer from "multer";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
+import {
+  publishRateLimiter,
+  uploadRateLimiter,
+  validateImageUpload,
+} from "../middleware/security.js";
 import { supabase } from "../lib/supabase.js";
 import { generateTitle } from "../services/titleGenerator.js";
 import { buildListingDescription } from "../services/descriptionBuilder.js";
@@ -597,7 +602,9 @@ function normalizeCertNumber(value: unknown): string | null {
 router.post(
   "/listings/:id/photos",
   requireAuth,
+  uploadRateLimiter,
   upload.single("photo"),
+  validateImageUpload,
   async (req, res) => {
     const authReq = req as AuthenticatedRequest;
     const file = req.file;
@@ -681,7 +688,7 @@ router.get("/listings/:id/photos", requireAuth, async (req, res) => {
 
 // ── Bulk publish ready listings ───────────────────────
 
-router.post("/listings/bulk-publish", requireAuth, async (req, res) => {
+router.post("/listings/bulk-publish", requireAuth, publishRateLimiter, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const body = req.body as {
     listing_ids?: unknown;
@@ -757,7 +764,7 @@ router.post("/listings/bulk-publish", requireAuth, async (req, res) => {
 
 // ── Publish listing to eBay ────────────────────────────
 
-router.post("/listings/:id/publish", requireAuth, async (req, res) => {
+router.post("/listings/:id/publish", requireAuth, publishRateLimiter, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
   const listingId = req.params.id as string;
   const body = req.body as {

@@ -139,15 +139,20 @@ export default function CreateListing() {
         return;
       }
 
-      const reader = new FileReader();
-      const dataUrl = await new Promise<string>((resolve) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(frontPhoto.file);
-      });
+      const formData = new FormData();
+      formData.append("photo", frontPhoto.file);
+      const uploaded = await apiUpload<{ url?: string; file_url?: string }>(
+        "/photos/upload",
+        formData,
+      );
+      const imageUrl = uploaded.url ?? uploaded.file_url;
+      if (!imageUrl) {
+        throw new Error("Photo upload succeeded but no image URL was returned.");
+      }
 
       const result = await apiFetch<CardDetails>("/cards/identify", {
         method: "POST",
-        body: JSON.stringify({ image_url: dataUrl }),
+        body: JSON.stringify({ image_url: imageUrl }),
       });
 
       setCard({

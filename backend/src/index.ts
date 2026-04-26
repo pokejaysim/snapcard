@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import healthRouter from "./routes/health.js";
 import authRouter from "./routes/auth.js";
 import listingsRouter from "./routes/listings.js";
@@ -14,9 +15,12 @@ import { errorHandler } from "./middleware/errorHandler.js";
 import { publishQueue } from "./lib/queue.js";
 import { processPublishJob } from "./jobs/publishListing.js";
 import { sendListingPublishedEmail, sendListingErrorEmail } from "./services/email.js";
+import { validateProductionEnvironment } from "./services/ebay/config.js";
+import type { RawBodyRequest } from "./types/express.js";
 
 const app = express();
 const port = process.env.PORT ?? 3001;
+validateProductionEnvironment();
 
 // Startup diagnostic — verify critical env vars are loaded by the running process.
 // Logs length only, not the values themselves.
@@ -34,14 +38,36 @@ console.log(
   `[Startup] USD_TO_CAD_RATE: ${process.env.USD_TO_CAD_RATE ?? "(unset, default 1.37)"}`,
 );
 
-const allowedOrigins = [
-  process.env.FRONTEND_URL,
-  "http://localhost:5173",
-].filter(Boolean) as string[];
+function getAllowedOrigins(): string[] {
+  const configuredOrigins = (process.env.CORS_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 
+  const origins = [
+    process.env.FRONTEND_URL,
+    ...configuredOrigins,
+  ].filter(Boolean) as string[];
+
+  if (process.env.NODE_ENV !== "production") {
+    origins.push("http://localhost:5173", "http://127.0.0.1:5173");
+  }
+
+  return Array.from(new Set(origins));
+}
+
+const allowedOrigins = getAllowedOrigins();
+
+app.set("trust proxy", 1);
+app.use(helmet());
 app.use(cors({ origin: allowedOrigins }));
 // 25mb limit — enough for a 10-15mb photo as base64 data URL
-app.use(express.json({ limit: "25mb" }));
+app.use(express.json({
+  limit: "25mb",
+  verify: (req, _res, buffer) => {
+    (req as RawBodyRequest).rawBody = Buffer.from(buffer);
+  },
+}));
 
 // Routes
 app.use("/api", healthRouter);
