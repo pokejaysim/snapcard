@@ -29,9 +29,8 @@ describe("descriptionTemplateRenderer", () => {
       card_name: `Pikachu <img src=x onerror="alert(1)"> & Friends`,
     });
 
-    expect(html).toContain(
-      "Pikachu &lt;img src=x onerror=&quot;alert(1)&quot;&gt; &amp; Friends",
-    );
+    expect(html).toContain("Pikachu &lt;img src=x &amp; Friends");
+    expect(html).not.toContain("onerror");
     expect(html).not.toContain("<img");
   });
 
@@ -81,17 +80,19 @@ describe("descriptionTemplateRenderer", () => {
 
   it("renders graded card company and grade placeholders", () => {
     const html = renderDescriptionTemplate(
-      "<p>{{card_type}}</p><p>{{condition}}</p><p>{{grading_company}} {{grade}}</p>",
+      "<p>{{card_type}}</p><p>{{condition}}</p><p>{{grading_company}} {{grade}}</p><p>{{cert_number}}</p>",
       {
         card_name: "Pikachu",
         card_type: "graded",
         grading_company: "PSA",
         grade: "10",
+        cert_number: "12345678",
       },
     );
 
     expect(html).toContain("<p>Graded</p>");
     expect(html).toContain("<p>PSA 10</p>");
     expect(html).toContain("<p>PSA 10</p>");
+    expect(html).toContain("<p>12345678</p>");
   });
 });
