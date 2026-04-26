@@ -33,7 +33,7 @@ describe("descriptionTemplateRenderer", () => {
     expect(html).not.toContain("<img");
     expect(html).not.toContain("onerror");
     expect(html).toContain("Pikachu");
-    expect(html).toContain("& Friends");
+    expect(html).toContain("&amp; Friends");
   });
 
   it("preserves normal eBay-friendly HTML", () => {
