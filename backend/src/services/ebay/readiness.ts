@@ -300,13 +300,32 @@ function findConditionByKeywords(
   return null;
 }
 
-function findDescriptor(
+export function findDescriptor(
   descriptors: EbayConditionDescriptor[],
   keywords: string[],
 ): EbayConditionDescriptor | null {
+  const normalizedKeywords = keywords.map((keyword) => normalizeForLookup(keyword));
+
   for (const descriptor of descriptors) {
     const normalizedName = normalizeForLookup(descriptor.name);
-    if (keywords.some((keyword) => normalizedName.includes(keyword))) {
+    if (normalizedKeywords.some((keyword) => normalizedName === keyword)) {
+      return descriptor;
+    }
+  }
+
+  for (const descriptor of descriptors) {
+    const normalizedName = normalizeForLookup(descriptor.name);
+    const nameTokens = normalizedName.split(" ").filter(Boolean);
+
+    if (
+      normalizedKeywords.some((keyword) => {
+        const keywordTokens = keyword.split(" ").filter(Boolean);
+        if (keywordTokens.length === 1) {
+          return nameTokens.includes(keyword);
+        }
+        return normalizedName.includes(keyword);
+      })
+    ) {
       return descriptor;
     }
   }
