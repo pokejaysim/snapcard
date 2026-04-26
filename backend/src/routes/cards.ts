@@ -1,29 +1,49 @@
 import { Router } from "express";
 import { requireAuth } from "../middleware/auth.js";
+import {
+  aiIdentifyDailyLimiter,
+  aiIdentifyMinuteLimiter,
+} from "../middleware/security.js";
 import { requirePlan } from "../middleware/requirePlan.js";
 import { identifyCard } from "../services/claude/vision.js";
 import { identifyCardsBatch } from "../services/claude/visionBatch.js";
+import { isAllowedIdentifyImageUrl } from "../services/security/imageUrlPolicy.js";
 
 const router = Router();
 
 // Identify a card from a photo URL (Pro feature)
-router.post("/cards/identify", requireAuth, requirePlan("ai_identify"), async (req, res) => {
-  const { image_url } = req.body as { image_url?: string };
+router.post(
+  "/cards/identify",
+  requireAuth,
+  aiIdentifyMinuteLimiter,
+  aiIdentifyDailyLimiter,
+  requirePlan("ai_identify"),
+  async (req, res) => {
+    const { image_url } = req.body as { image_url?: string };
 
-  if (!image_url) {
-    res.status(400).json({ error: "image_url is required" });
-    return;
-  }
+    if (!image_url) {
+      res.status(400).json({ error: "image_url is required" });
+      return;
+    }
 
-  try {
-    const result = await identifyCard(image_url);
-    res.json(result);
-  } catch (err) {
-    console.error("Card identification failed:", err);
-    const message = err instanceof Error ? err.message : "Card identification failed";
-    res.status(500).json({ error: message, code: "VISION_ERROR" });
-  }
-});
+    if (!isAllowedIdentifyImageUrl(image_url)) {
+      res.status(400).json({
+        error: "AI identification requires a SnapCard-uploaded image.",
+        code: "INVALID_IMAGE_URL",
+      });
+      return;
+    }
+
+    try {
+      const result = await identifyCard(image_url);
+      res.json(result);
+    } catch (err) {
+      console.error("Card identification failed:", err);
+      const message = err instanceof Error ? err.message : "Card identification failed";
+      res.status(500).json({ error: message, code: "VISION_ERROR" });
+    }
+  },
+);
 
 // Batch identify cards from multiple photo URLs
 const MAX_BATCH_SIZE = 50;
@@ -31,6 +51,8 @@ const MAX_BATCH_SIZE = 50;
 router.post(
   "/cards/identify/batch",
   requireAuth,
+  aiIdentifyMinuteLimiter,
+  aiIdentifyDailyLimiter,
   requirePlan("ai_identify"),
   async (req, res) => {
     const { image_urls } = req.body as { image_urls?: string[] };
@@ -43,6 +65,14 @@ router.post(
     if (image_urls.length > MAX_BATCH_SIZE) {
       res.status(400).json({
         error: `Batch size ${String(image_urls.length)} exceeds maximum of ${String(MAX_BATCH_SIZE)}`,
+      });
+      return;
+    }
+
+    if (!image_urls.every((imageUrl) => isAllowedIdentifyImageUrl(imageUrl))) {
+      res.status(400).json({
+        error: "Batch AI identification requires SnapCard-uploaded images.",
+        code: "INVALID_IMAGE_URL",
       });
       return;
     }

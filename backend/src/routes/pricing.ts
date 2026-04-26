@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
+import { pricingRateLimiter } from "../middleware/security.js";
 import { requirePlan } from "../middleware/requirePlan.js";
 import { supabase } from "../lib/supabase.js";
 import {
@@ -79,7 +80,12 @@ interface SuggestResponse {
 
 // ── POST /pricing/suggest ─────────────────────────────────
 
-router.post("/pricing/suggest", requireAuth, requirePlan("pricing_suggestions"), async (req, res) => {
+router.post(
+  "/pricing/suggest",
+  requireAuth,
+  pricingRateLimiter,
+  requirePlan("pricing_suggestions"),
+  async (req, res) => {
   const _authReq = req as AuthenticatedRequest;
   const body = req.body as SuggestRequestBody;
 

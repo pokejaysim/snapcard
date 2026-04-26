@@ -1,15 +1,17 @@
 import { Router } from "express";
 import { supabase } from "../lib/supabase.js";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
+import { authRateLimiter } from "../middleware/security.js";
 import { sendWelcomeEmail } from "../services/email.js";
 import { getEbayUrls, isMockMode } from "../services/ebay/config.js";
 import { getEbayUserId } from "../services/ebay/trading.js";
+import { generateOAuthState, verifyOAuthState } from "../services/security/oauthState.js";
 
 const router = Router();
 
 // ── Register ───────────────────────────────────────────
 
-router.post("/auth/register", async (req, res) => {
+router.post("/auth/register", authRateLimiter, async (req, res) => {
   const { email, password, name } = req.body as {
     email?: string;
     password?: string;
@@ -72,7 +74,7 @@ router.post("/auth/register", async (req, res) => {
 
 // ── Login ──────────────────────────────────────────────
 
-router.post("/auth/login", async (req, res) => {
+router.post("/auth/login", authRateLimiter, async (req, res) => {
   const { email, password } = req.body as {
     email?: string;
     password?: string;
@@ -114,11 +116,17 @@ router.post("/auth/logout", requireAuth, async (_req, res) => {
 
 // ── eBay OAuth: Get consent URL ────────────────────────
 
-router.get("/auth/ebay-oauth-url", requireAuth, (_req, res) => {
+router.get("/auth/ebay-oauth-url", requireAuth, (req, res) => {
+  const authReq = req as AuthenticatedRequest;
+  const state = generateOAuthState(authReq.userId);
+
   // Mock mode: return a fake callback URL pointing to the frontend
   if (isMockMode()) {
     const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:5173";
-    res.json({ url: `${frontendUrl}/auth/ebay-callback?code=MOCK_CODE_12345`, mock: true });
+    res.json({
+      url: `${frontendUrl}/auth/ebay-callback?code=MOCK_CODE_12345&state=${encodeURIComponent(state)}`,
+      mock: true,
+    });
     return;
   }
 
@@ -130,6 +138,7 @@ router.get("/auth/ebay-oauth-url", requireAuth, (_req, res) => {
   ebayAuthUrl.searchParams.set("client_id", appId);
   ebayAuthUrl.searchParams.set("response_type", "code");
   ebayAuthUrl.searchParams.set("redirect_uri", redirectUri);
+  ebayAuthUrl.searchParams.set("state", state);
   ebayAuthUrl.searchParams.set(
     "scope",
     "https://api.ebay.com/oauth/api_scope https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.account https://api.ebay.com/oauth/api_scope/sell.fulfillment"
@@ -142,15 +151,31 @@ router.get("/auth/ebay-oauth-url", requireAuth, (_req, res) => {
 
 router.post("/auth/ebay-callback", requireAuth, async (req, res) => {
   const authReq = req as AuthenticatedRequest;
-  const { code } = req.body as { code?: string };
+  const { code, state } = req.body as { code?: string; state?: string };
 
   if (!code) {
     res.status(400).json({ error: "Authorization code is required" });
     return;
   }
 
+  if (!verifyOAuthState(state, authReq.userId)) {
+    res.status(400).json({
+      error: "Invalid or expired eBay authorization state. Please try linking again.",
+      code: "EBAY_AUTH_STATE_ERROR",
+    });
+    return;
+  }
+
   // Mock mode: skip real token exchange
   if (code.startsWith("MOCK_")) {
+    if (!isMockMode()) {
+      res.status(400).json({
+        error: "Mock eBay authorization codes are disabled.",
+        code: "EBAY_MOCK_DISABLED",
+      });
+      return;
+    }
+
     const farFuture = new Date("2099-12-31T23:59:59Z").toISOString();
 
     const { error } = await supabase

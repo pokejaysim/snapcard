@@ -120,8 +120,10 @@ Add the same variables in your Railway project's **Variables** tab. Make sure `E
 eBay requires apps that store user data to handle account deletion requests. SnapCard stores eBay tokens in the `ebay_accounts` table, so you need to set this up:
 
 1. In the eBay developer portal, go to your application's **Account Deletion** settings
-2. Set the notification endpoint URL to: `https://snapcard-production-e7e7.up.railway.app/api/marketplace-account-deletion`
-3. SnapCard's backend already has this endpoint implemented — it deletes the matching `ebay_accounts` row when eBay sends a deletion notification
+2. Generate a long random verification token and save it as `EBAY_MARKETPLACE_DELETION_VERIFICATION_TOKEN`
+3. Set `EBAY_MARKETPLACE_DELETION_ENDPOINT` to the exact public endpoint URL you will enter in eBay, for example: `https://your-railway-app.up.railway.app/api/marketplace-account-deletion`
+4. Enter that same endpoint URL and verification token in the eBay developer portal
+5. SnapCard responds to eBay's challenge request and verifies signed deletion notifications before deleting stored eBay account data
 
 ### 6C: Update Environment Variables
 
@@ -130,9 +132,16 @@ Update these in both `backend/.env` and Railway:
 ```env
 EBAY_APP_ID=your-production-client-id
 EBAY_CERT_ID=your-production-client-secret
+EBAY_DEV_ID=your-production-dev-id
 EBAY_REDIRECT_URI=Your_Production_RuName
 EBAY_ENVIRONMENT=production
 EBAY_MOCK_MODE=false
+OAUTH_STATE_SECRET=long-random-secret
+EBAY_MARKETPLACE_DELETION_VERIFICATION_TOKEN=long-random-token
+EBAY_MARKETPLACE_DELETION_ENDPOINT=https://your-railway-app.up.railway.app/api/marketplace-account-deletion
+EBAY_ALLOW_LIVE_PUBLISH_EMAILS=your-beta-email@example.com
+FRONTEND_URL=https://snapcard.ca
+CORS_ALLOWED_ORIGINS=https://snapcard.ca
 ```
 
 ### 6D: Application Growth Check (if needed)
@@ -158,12 +167,16 @@ If eBay flags your app for review or you want to use restricted APIs:
 | `EBAY_LOCATION` | Conditionally | — | Seller city/state or city/province for Trading API listings |
 | `EBAY_POSTAL_CODE` | Conditionally | — | Seller postal/ZIP code for Trading API listings |
 | `EBAY_MOCK_MODE` | No | `false` | Skip real API calls when `true` |
-| `EBAY_LOCATION` | Yes* | — | Item location string (e.g. `Vancouver, BC`)
-| `EBAY_POSTAL_CODE` | Yes* | — | Item postal code (e.g. `V6B1A1`)
+| `OAUTH_STATE_SECRET` | Production | — | Signs short-lived eBay OAuth state tokens |
+| `EBAY_MARKETPLACE_DELETION_VERIFICATION_TOKEN` | Production | — | eBay deletion webhook challenge token |
+| `EBAY_MARKETPLACE_DELETION_ENDPOINT` | Production | — | Exact public deletion webhook URL configured in eBay |
+| `EBAY_ALLOW_LIVE_PUBLISH_EMAILS` | Production beta | — | Comma-separated emails allowed to publish live |
+| `EBAY_ALLOW_LIVE_PUBLISH_USER_IDS` | Production beta | — | Comma-separated Supabase user IDs allowed to publish live |
+| `CORS_ALLOWED_ORIGINS` | No | — | Extra comma-separated frontend origins beyond `FRONTEND_URL` |
 
 *At least one of `EBAY_LOCATION` or `EBAY_POSTAL_CODE` must be set to publish listings. eBay requires either `Item.Location` or `Item.PostalCode` in every listing.
 
-**Mock mode** activates automatically when `EBAY_MOCK_MODE=true` OR `EBAY_APP_ID` is not set. In mock mode, OAuth returns fake tokens and publish creates mock eBay item IDs.
+**Mock mode** activates automatically when `EBAY_MOCK_MODE=true` OR `EBAY_APP_ID` is not set. Production startup fails if `EBAY_ENVIRONMENT=production` and mock mode is enabled.
 
 ---
 
@@ -206,10 +219,12 @@ If eBay flags your app for review or you want to use restricted APIs:
 ### OAuth Flow
 1. Frontend calls `GET /api/auth/ebay-oauth-url`
 2. Backend constructs eBay OAuth URL with scopes: `sell.inventory`, `sell.account`, `sell.fulfillment`
-3. User approves on eBay → redirected to `/auth/ebay-callback?code=AUTH_CODE`
-4. Frontend sends code to `POST /api/auth/ebay-callback`
-5. Backend exchanges code for access + refresh tokens
-6. Tokens stored in `ebay_accounts` table
+3. Backend includes a short-lived signed `state` tied to the logged-in SnapCard user
+4. User approves on eBay → redirected to `/auth/ebay-callback?code=AUTH_CODE&state=SIGNED_STATE`
+5. Frontend sends code and state to `POST /api/auth/ebay-callback`
+6. Backend verifies the state before token exchange
+7. Backend exchanges code for access + refresh tokens
+8. Tokens stored in `ebay_accounts` table
 
 ### Token Management
 - Access tokens auto-refresh when they expire within 5 minutes

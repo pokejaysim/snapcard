@@ -13,15 +13,21 @@ export default function EbayCallback() {
 
   useEffect(() => {
     const code = searchParams.get("code");
+    const state = searchParams.get("state");
 
     if (!code) {
       setError("No authorization code received from eBay");
       return;
     }
 
+    if (!state) {
+      setError("No security state received from eBay. Please try linking again.");
+      return;
+    }
+
     apiFetch<{ message: string; ebay_user_id: string }>("/auth/ebay-callback", {
       method: "POST",
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ code, state }),
     })
       .then(() => {
         const returnTo = localStorage.getItem("snapcard_ebay_return");

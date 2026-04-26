@@ -51,6 +51,72 @@ export function isMockMode(): boolean {
   return process.env.EBAY_MOCK_MODE === "true" || !process.env.EBAY_APP_ID;
 }
 
+function envList(name: string): string[] {
+  return (process.env[name] ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function requireEnv(name: string, errors: string[]): void {
+  if (!process.env[name]) {
+    errors.push(`${name} is required in production.`);
+  }
+}
+
+export function validateProductionEnvironment(): void {
+  const isProductionRuntime = process.env.NODE_ENV === "production";
+  const isLiveEbay = process.env.EBAY_ENVIRONMENT === "production";
+
+  if (!isProductionRuntime && !isLiveEbay) return;
+
+  const errors: string[] = [];
+
+  const requiredRuntimeEnv = [
+    "SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "FRONTEND_URL",
+    "ANTHROPIC_API_KEY",
+    "CLOUDINARY_CLOUD_NAME",
+    "CLOUDINARY_API_KEY",
+    "CLOUDINARY_API_SECRET",
+  ];
+
+  const requiredLiveEbayEnv = [
+    "EBAY_APP_ID",
+    "EBAY_CERT_ID",
+    "EBAY_DEV_ID",
+    "EBAY_REDIRECT_URI",
+    "OAUTH_STATE_SECRET",
+    "EBAY_MARKETPLACE_DELETION_VERIFICATION_TOKEN",
+    "EBAY_MARKETPLACE_DELETION_ENDPOINT",
+  ];
+
+  if (isProductionRuntime) {
+    requiredRuntimeEnv.forEach((name) => requireEnv(name, errors));
+  }
+
+  if (isLiveEbay) {
+    requiredLiveEbayEnv.forEach((name) => requireEnv(name, errors));
+  }
+
+  if (isLiveEbay && process.env.EBAY_MOCK_MODE === "true") {
+    errors.push("EBAY_MOCK_MODE must be false or unset when EBAY_ENVIRONMENT=production.");
+  }
+
+  if (
+    isLiveEbay &&
+    envList("EBAY_ALLOW_LIVE_PUBLISH_USER_IDS").length === 0 &&
+    envList("EBAY_ALLOW_LIVE_PUBLISH_EMAILS").length === 0
+  ) {
+    errors.push("Production eBay controlled beta requires a live publish allowlist.");
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`Production configuration is unsafe:\n- ${errors.join("\n- ")}`);
+  }
+}
+
 export function getEbayMarketplaceConfig(marketplaceId?: string): EbayMarketplaceConfig {
   const id = marketplaceId ?? process.env.EBAY_MARKETPLACE_ID ?? getEbayMarketplaceId();
   const config = EBAY_MARKETPLACES[id];
@@ -98,8 +164,10 @@ export function isLivePublishAllowed(userId: string, userEmail: string): { allow
     return { allowed: true };
   }
 
-  const allowedIds = (process.env.EBAY_ALLOW_LIVE_PUBLISH_USER_IDS ?? "").split(",").map(s => s.trim()).filter(Boolean);
-  const allowedEmails = (process.env.EBAY_ALLOW_LIVE_PUBLISH_EMAILS ?? "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+  const allowedIds = envList("EBAY_ALLOW_LIVE_PUBLISH_USER_IDS");
+  const allowedEmails = envList("EBAY_ALLOW_LIVE_PUBLISH_EMAILS").map((email) =>
+    email.toLowerCase(),
+  );
 
   // If no allowlist is configured in production, block everyone
   if (allowedIds.length === 0 && allowedEmails.length === 0) {

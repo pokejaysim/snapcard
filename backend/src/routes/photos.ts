@@ -1,6 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
+import { uploadRateLimiter, validateImageUpload } from "../middleware/security.js";
 import { uploadPhoto } from "../services/storage.js";
 import { supabase } from "../lib/supabase.js";
 
@@ -11,7 +12,9 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 router.post(
   "/photos",
   requireAuth,
+  uploadRateLimiter,
   upload.single("photo"),
+  validateImageUpload,
   async (req, res) => {
     const authReq = req as AuthenticatedRequest;
     const file = req.file;
@@ -74,7 +77,9 @@ router.post(
 router.post(
   "/photos/upload",
   requireAuth,
+  uploadRateLimiter,
   upload.single("photo"),
+  validateImageUpload,
   async (req, res) => {
     const authReq = req as AuthenticatedRequest;
     const file = req.file;

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth.js";
+import { uploadRateLimiter, validateImageUpload } from "../middleware/security.js";
 import { supabase } from "../lib/supabase.js";
 import { PLAN_LIMITS, type PlanName } from "../lib/plans.js";
 import {
@@ -12,6 +13,11 @@ import {
   saveListingPreferences,
 } from "../services/listingPreferences.js";
 import { uploadSellerLogo } from "../services/storage.js";
+import {
+  buildDeletionChallengeResponse,
+  verifyEbayDeletionNotification,
+} from "../services/ebay/accountDeletion.js";
+import type { RawBodyRequest } from "../types/express.js";
 
 const router = Router();
 const uploadLogo = multer({
@@ -180,18 +186,15 @@ router.put("/account/listing-preferences", requireAuth, async (req, res) => {
 router.post(
   "/account/listing-preferences/logo",
   requireAuth,
+  uploadRateLimiter,
   uploadLogo.single("logo"),
+  validateImageUpload,
   async (req, res) => {
     const authReq = req as AuthenticatedRequest;
     const file = req.file;
 
     if (!file) {
       res.status(400).json({ error: "No logo uploaded" });
-      return;
-    }
-
-    if (!file.mimetype.startsWith("image/")) {
-      res.status(400).json({ error: "Logo must be an image file" });
       return;
     }
 
@@ -322,11 +325,42 @@ router.put("/account/ebay-publish-settings", requireAuth, async (req, res) => {
 // Required by eBay for production keyset approval.
 // eBay calls this webhook when a user requests account deletion.
 
+router.get("/marketplace-account-deletion", (req, res) => {
+  const challengeCode = req.query.challenge_code;
+  if (typeof challengeCode !== "string" || !challengeCode) {
+    res.status(400).json({ error: "challenge_code is required" });
+    return;
+  }
+
+  try {
+    res.json({
+      challengeResponse: buildDeletionChallengeResponse(challengeCode),
+    });
+  } catch (error) {
+    console.error("[eBay] Failed deletion challenge response:", error);
+    res.status(500).json({ error: "Deletion webhook is not configured" });
+  }
+});
+
 router.post("/marketplace-account-deletion", async (req, res) => {
+  const signatureHeader = req.header("x-ebay-signature");
+  const rawBody = (req as RawBodyRequest).rawBody;
+
+  const verified = await verifyEbayDeletionNotification(signatureHeader, rawBody);
+  if (!verified) {
+    res.status(412).json({ error: "Invalid eBay notification signature" });
+    return;
+  }
+
   const notification = req.body as {
     metadata?: { topic?: string };
     notification?: { data?: { username?: string; userId?: string; eiasToken?: string } };
   };
+
+  if (notification.metadata?.topic !== "MARKETPLACE_ACCOUNT_DELETION") {
+    res.status(200).json({ status: "ignored" });
+    return;
+  }
 
   const ebayUserId = notification?.notification?.data?.username
     || notification?.notification?.data?.userId;

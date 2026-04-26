@@ -170,7 +170,7 @@ export function normalizeForLookup(value: string): string {
     .trim();
 }
 
-async function getAppAccessToken(): Promise<string> {
+export async function getAppAccessToken(): Promise<string> {
   if (appTokenCache && appTokenCache.expiresAt > Date.now()) {
     return appTokenCache.value;
   }
