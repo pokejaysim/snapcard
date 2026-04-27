@@ -59,7 +59,17 @@ export async function getValidEbayToken(userId: string): Promise<string> {
 
   if (!tokenRes.ok) {
     const errorBody = await tokenRes.text();
-    throw new Error(`eBay token refresh failed: ${errorBody}`);
+    console.error(`[eBay] Token refresh failed (${tokenRes.status}):`, errorBody.substring(0, 200));
+
+    // Detect invalid/expired refresh token — user needs to reconnect
+    if (tokenRes.status === 400 || tokenRes.status === 401) {
+      throw Object.assign(
+        new Error("eBay connection expired. Please reconnect your eBay account."),
+        { code: "EBAY_RECONNECT_REQUIRED" },
+      );
+    }
+
+    throw new Error(`eBay token refresh failed: ${errorBody.substring(0, 200)}`);
   }
 
   const tokenData = (await tokenRes.json()) as {

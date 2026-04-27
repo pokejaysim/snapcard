@@ -42,6 +42,7 @@ interface AccountInfo {
 export default function Account() {
   const [linking, setLinking] = useState(false);
   const [linkError, setLinkError] = useState("");
+  const [disconnecting, setDisconnecting] = useState(false);
 
   const { data: account, isLoading: accountLoading } = useQuery({
     queryKey: ["account"],
@@ -53,9 +54,9 @@ export default function Account() {
     queryFn: () => apiFetch<UsageInfo>("/account/usage"),
   });
 
-  const { data: ebayStatus } = useQuery({
+  const { data: ebayStatus, refetch: refetchEbayStatus } = useQuery({
     queryKey: ["ebay-status"],
-    queryFn: () => apiFetch<{ linked: boolean; ebay_user_id?: string }>("/account/ebay-status"),
+    queryFn: () => apiFetch<{ linked: boolean; ebay_user_id?: string; token_expired?: boolean; needs_reconnect?: boolean }>("/account/ebay-status"),
   });
 
   const { data: listingPreferences } = useQuery({
@@ -75,6 +76,19 @@ export default function Account() {
         err instanceof Error ? err.message : "Failed to connect to eBay"
       );
       setLinking(false);
+    }
+  }
+
+  async function disconnectEbay() {
+    if (!confirm("Disconnect your eBay account? You'll need to reconnect to publish listings.")) return;
+    setDisconnecting(true);
+    try {
+      await apiFetch<{ unlinked: boolean }>("/account/ebay", { method: "DELETE" });
+      refetchEbayStatus();
+    } catch {
+      alert("Failed to disconnect. Please try again.");
+    } finally {
+      setDisconnecting(false);
     }
   }
 
@@ -152,13 +166,34 @@ export default function Account() {
         </CardHeader>
         <CardContent className="space-y-3">
           {ebayStatus?.linked ? (
-            <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-3 text-sm font-medium text-primary">
-              <CheckCircle2 className="size-4" />
-              <span>
-                Connected
-                {ebayStatus.ebay_user_id && ` as ${ebayStatus.ebay_user_id}`}
-              </span>
-            </div>
+            <>
+              {ebayStatus.needs_reconnect ? (
+                <div className="flex items-start gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                  <span>Your eBay connection expired or is no longer valid. Please reconnect eBay.</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-3 text-sm font-medium text-primary">
+                  <CheckCircle2 className="size-4" />
+                  <span>
+                    Connected
+                    {ebayStatus.ebay_user_id && ` as ${ebayStatus.ebay_user_id}`}
+                  </span>
+                </div>
+              )}
+              <div className="flex gap-2">
+                {ebayStatus.needs_reconnect && (
+                  <Button onClick={linkEbay} disabled={linking} variant="default" size="sm">
+                    {linking ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <ExternalLink className="mr-1.5 size-4" />}
+                    {linking ? "Redirecting..." : "Reconnect eBay"}
+                  </Button>
+                )}
+                <Button onClick={disconnectEbay} disabled={disconnecting} variant="outline" size="sm">
+                  {disconnecting ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : null}
+                  {disconnecting ? "Disconnecting..." : "Disconnect eBay"}
+                </Button>
+              </div>
+            </>
           ) : (
             <>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">

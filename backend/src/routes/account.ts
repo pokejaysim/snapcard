@@ -222,7 +222,7 @@ router.get("/account/ebay-status", requireAuth, async (req, res) => {
 
   const { data } = await supabase
     .from("ebay_accounts")
-    .select("ebay_user_id, site_id, created_at, refreshed_at")
+    .select("ebay_user_id, site_id, created_at, refreshed_at, token_expires_at, refresh_token")
     .eq("user_id", authReq.userId)
     .single();
 
@@ -231,12 +231,20 @@ router.get("/account/ebay-status", requireAuth, async (req, res) => {
     return;
   }
 
+  // Check if token is expired and whether we have a refresh token
+  const expiresAt = data.token_expires_at ? new Date(data.token_expires_at).getTime() : 0;
+  const isExpired = expiresAt < Date.now();
+  const hasRefreshToken = !!data.refresh_token;
+  const needsReconnect = isExpired && !hasRefreshToken;
+
   res.json({
     linked: true,
     ebay_user_id: data.ebay_user_id,
     site_id: data.site_id,
     linked_at: data.created_at,
     refreshed_at: data.refreshed_at,
+    token_expired: isExpired,
+    needs_reconnect: needsReconnect,
   });
 });
 
