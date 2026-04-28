@@ -1,6 +1,17 @@
-import { useRef, useState } from "react";
-import { AlertTriangle, ArrowLeftRight, Image, Upload, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+/**
+ * Listing photo slots — slab/scanner edition.
+ *
+ * 3-slot uploader (Front · Back · Extra) used by the New Listing wizard.
+ * Each slot is a self-contained drop target with its own preview, replace,
+ * and remove behaviour. Bulk drop assigns up to 3 files in order.
+ *
+ * Behaviour preserved 1:1 — same exports, same slot definitions, same
+ * file-assignment order, same swap front/back, same `assignFilesByOrder`
+ * fallback. Only the visual layer changed.
+ */
+import { useRef, useState, type DragEventHandler } from "react";
+import { AlertTriangle, ArrowLeftRight, ImageIcon, Upload, X } from "lucide-react";
+import { SlabButton } from "@/components/slab";
 
 export type ListingPhotoSlotKey = "front" | "back" | "extra";
 
@@ -23,24 +34,24 @@ const SLOT_DEFINITIONS: Array<{
 }> = [
   {
     key: "front",
-    label: "Front",
-    shortLabel: "Front",
-    helper: "Required. Used for AI identification and the main eBay photo.",
+    label: "FRONT",
+    shortLabel: "FRONT",
+    helper: "Required. Used for AI identification and as the main eBay photo.",
     position: 1,
     required: true,
   },
   {
     key: "back",
-    label: "Back",
-    shortLabel: "Back",
+    label: "BACK",
+    shortLabel: "BACK",
     helper: "Recommended. Buyers like seeing the actual card back.",
     position: 2,
   },
   {
     key: "extra",
-    label: "Extra / Shipping Graphic",
-    shortLabel: "Extra",
-    helper: "Optional extra image. Use carefully: eBay prefers gallery photos to show the actual item.",
+    label: "EXTRA",
+    shortLabel: "EXTRA",
+    helper: "Optional. Use sparingly — eBay prefers gallery photos of the item.",
     position: 3,
   },
 ];
@@ -51,7 +62,9 @@ export const EMPTY_LISTING_PHOTO_SLOTS: ListingPhotoSlots = {
   extra: null,
 };
 
-export function listingPhotoSlotsToArray(slots: ListingPhotoSlots): ListingPhotoSlotFile[] {
+export function listingPhotoSlotsToArray(
+  slots: ListingPhotoSlots,
+): ListingPhotoSlotFile[] {
   return SLOT_DEFINITIONS.map((slot) => slots[slot.key]).filter(
     (photo): photo is ListingPhotoSlotFile => Boolean(photo),
   );
@@ -131,105 +144,173 @@ export function ListingPhotoSlotsUploader({
     event.target.value = "";
   }
 
-  function handleDrop(event: React.DragEvent<HTMLDivElement>) {
+  const handleDrop: DragEventHandler<HTMLDivElement> = (event) => {
     event.preventDefault();
     event.stopPropagation();
     setBulkDragOver(false);
     assignFilesByOrder(event.dataTransfer.files);
-  }
+  };
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border p-4">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* Bulk drop strip + add-photos button */}
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          alignItems: "stretch",
+          flexWrap: "wrap",
+        }}
+      >
+        <div
+          onDragOver={(event) => {
+            event.preventDefault();
+            setBulkDragOver(true);
+          }}
+          onDragLeave={() => setBulkDragOver(false)}
+          onDrop={handleDrop}
+          style={{
+            flex: "1 1 280px",
+            border: `1.5px dashed ${bulkDragOver ? "var(--accent)" : "var(--ink)"}`,
+            background: bulkDragOver ? "var(--accent-soft)" : "var(--paper-2)",
+            padding: 12,
+            transition: "background 0.15s, border-color 0.15s",
+          }}
+        >
           <div
-            onDragOver={(event) => {
-              event.preventDefault();
-              setBulkDragOver(true);
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              letterSpacing: 1.5,
+              fontWeight: 700,
+              color: "var(--ink-soft)",
             }}
-            onDragLeave={() => setBulkDragOver(false)}
-            onDrop={handleDrop}
-            className={`rounded-lg border-2 border-dashed p-3 transition sm:flex-1 ${
-              bulkDragOver
-                ? "border-primary bg-primary/5"
-                : "border-transparent bg-muted/30"
-            }`}
           >
-            <p className="text-sm font-medium">Front, back, then optional extra</p>
-            <p className="text-xs text-muted-foreground">
-              Drop up to 3 images here. File 1 = front, file 2 = back, file 3 = extra.
-            </p>
+            ↓ DROP HERE TO BULK ASSIGN
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => bulkInputRef.current?.click()}
+          <div
+            style={{
+              fontFamily: "var(--font-marker)",
+              fontSize: 12,
+              color: "var(--ink-soft)",
+              marginTop: 4,
+              lineHeight: 1.4,
+            }}
           >
-            <Upload className="mr-1.5 size-4" />
-            Add Photos
-          </Button>
-          <input
-            ref={bulkInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            className="hidden"
-            onChange={handleBulkInput}
-          />
+            Up to 3 images. File 1 = front, file 2 = back, file 3 = extra.
+          </div>
         </div>
-
-        <div className="grid gap-3 sm:grid-cols-3">
-          {SLOT_DEFINITIONS.map((slot) => (
-            <PhotoSlotCard
-              key={slot.key}
-              slot={slot}
-              photo={slots[slot.key]}
-              onReplace={(file) => replaceSlot(slot.key, file)}
-              onRemove={() => removeSlot(slot.key)}
-              dragOver={slotDragOver === slot.key}
-              onDragOver={() => setSlotDragOver(slot.key)}
-              onDragLeave={() => setSlotDragOver((current) =>
-                current === slot.key ? null : current,
-              )}
-              onDrop={(file) => {
-                setSlotDragOver(null);
-                replaceSlot(slot.key, file);
-              }}
-            />
-          ))}
-        </div>
+        <SlabButton size="sm" onClick={() => bulkInputRef.current?.click()}>
+          <Upload className="size-3" />
+          ADD PHOTOS
+        </SlabButton>
+        <input
+          ref={bulkInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          style={{ display: "none" }}
+          onChange={handleBulkInput}
+        />
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant="outline"
+      {/* 3-slot grid */}
+      <div className="lps-slot-grid">
+        {SLOT_DEFINITIONS.map((slot) => (
+          <PhotoSlotCard
+            key={slot.key}
+            slot={slot}
+            photo={slots[slot.key]}
+            onReplace={(file) => replaceSlot(slot.key, file)}
+            onRemove={() => removeSlot(slot.key)}
+            dragOver={slotDragOver === slot.key}
+            onDragOver={() => setSlotDragOver(slot.key)}
+            onDragLeave={() =>
+              setSlotDragOver((current) =>
+                current === slot.key ? null : current,
+              )
+            }
+            onDrop={(file) => {
+              setSlotDragOver(null);
+              replaceSlot(slot.key, file);
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Footer actions + warnings */}
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <SlabButton
           size="sm"
           disabled={!slots.front || !slots.back}
           onClick={swapFrontBack}
         >
-          <ArrowLeftRight className="mr-1.5 size-4" />
-          Swap front/back
-        </Button>
+          <ArrowLeftRight className="size-3" />
+          SWAP FRONT/BACK
+        </SlabButton>
+        {!slots.back && (
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              letterSpacing: 1,
+              padding: "4px 8px",
+              background: "#f5a623",
+              color: "var(--ink)",
+              fontWeight: 700,
+              border: "1.5px solid var(--ink)",
+            }}
+          >
+            ? BACK PHOTO MISSING
+          </span>
+        )}
       </div>
 
-      {!slots.back && (
-        <p className="text-xs text-muted-foreground">
-          Back photo missing. Recommended for buyer trust.
-        </p>
-      )}
-
-      <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-        <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-        <p>
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          alignItems: "flex-start",
+          border: "1.5px solid #f5a623",
+          background: "rgba(245,166,35,0.08)",
+          padding: "10px 12px",
+        }}
+      >
+        <AlertTriangle
+          className="size-4 shrink-0"
+          style={{ color: "#a87a23", marginTop: 2 }}
+        />
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            letterSpacing: 0.5,
+            color: "var(--ink)",
+            lineHeight: 1.5,
+          }}
+        >
           Optional extra images publish to eBay as listing photos. eBay prefers
-          gallery photos to show the actual item, so use graphics sparingly.
-        </p>
+          gallery photos showing the actual item — use graphics sparingly.
+        </div>
       </div>
+
+      <style>{`
+        .lps-slot-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 10px;
+        }
+        @media (max-width: 600px) {
+          .lps-slot-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
     </div>
   );
 }
+
+// ── Photo slot card ─────────────────────────────────────────
 
 function PhotoSlotCard({
   slot,
@@ -269,49 +350,104 @@ function PhotoSlotCard({
         event.stopPropagation();
         onDrop(event.dataTransfer.files[0]);
       }}
-      className={`rounded-lg border bg-background p-3 transition ${
-        dragOver ? "border-primary bg-primary/5 ring-2 ring-primary/20" : ""
-      }`}
+      style={{
+        background: dragOver ? "var(--accent-soft)" : "var(--paper)",
+        border: `2px solid ${dragOver ? "var(--accent)" : "var(--ink)"}`,
+        boxShadow: photo ? "3px 3px 0 var(--ink)" : "none",
+        transition: "background 0.15s, border-color 0.15s",
+      }}
     >
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div>
-          <p className="text-sm font-medium">
+      {/* Header band */}
+      <div
+        style={{
+          background: photo ? "var(--ink)" : "var(--paper-2)",
+          color: photo ? "var(--paper)" : "var(--ink)",
+          padding: "5px 10px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 6,
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          letterSpacing: 1.5,
+          borderBottom: photo ? "none" : "1.5px solid var(--ink)",
+        }}
+      >
+        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span
+            style={{
+              background: photo ? "var(--accent)" : "var(--ink)",
+              color: photo ? "var(--ink)" : "var(--paper)",
+              padding: "1px 6px",
+              fontWeight: 700,
+            }}
+          >
+            {String(slot.position).padStart(2, "0")}
+          </span>
+          <span>
             {slot.label}
             {slot.required ? " *" : ""}
-          </p>
-          <p className="text-xs text-muted-foreground">Photo #{String(slot.position)}</p>
-        </div>
+          </span>
+        </span>
         {photo && (
           <button
             type="button"
             onClick={onRemove}
-            className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
             aria-label={`Remove ${slot.label} photo`}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "var(--paper)",
+              cursor: "pointer",
+              padding: 0,
+              display: "flex",
+              alignItems: "center",
+            }}
           >
             <X className="size-4" />
           </button>
         )}
       </div>
 
+      {/* Image / dropzone */}
       <label
         htmlFor={inputId}
-        className={`flex aspect-[3/4] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-lg border text-center transition ${
-          photo
-            ? "border-border bg-muted"
-            : "border-dashed border-muted-foreground/40 hover:bg-muted/50"
-        }`}
+        style={{
+          display: "flex",
+          aspectRatio: "5/7",
+          cursor: "pointer",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          overflow: "hidden",
+          background: photo ? "var(--paper-2)" : "transparent",
+          textAlign: "center",
+          padding: photo ? 0 : 12,
+        }}
       >
         {photo ? (
           <img
             src={photo.preview}
             alt={`${slot.shortLabel} preview`}
-            className="size-full object-cover"
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
           />
         ) : (
-          <div className="flex flex-col items-center gap-2 px-3 text-xs text-muted-foreground">
-            <Image className="size-8" />
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 6,
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              letterSpacing: 1.5,
+              color: "var(--ink-soft)",
+              fontWeight: 700,
+            }}
+          >
+            <ImageIcon className="size-7" />
             <span>{slot.shortLabel}</span>
-            <span>Click to upload</span>
+            <span style={{ fontWeight: 400, opacity: 0.7 }}>CLICK TO UPLOAD</span>
           </div>
         )}
       </label>
@@ -320,14 +456,27 @@ function PhotoSlotCard({
         id={inputId}
         type="file"
         accept="image/*"
-        className="hidden"
+        style={{ display: "none" }}
         onChange={(event) => {
           onReplace(event.target.files?.[0]);
           event.target.value = "";
         }}
       />
 
-      <p className="mt-2 text-xs text-muted-foreground">{slot.helper}</p>
+      {/* Helper */}
+      <div
+        style={{
+          padding: "8px 10px",
+          background: photo ? "var(--paper)" : "var(--paper-2)",
+          borderTop: photo ? "1.5px solid var(--ink)" : "none",
+          fontFamily: "var(--font-marker)",
+          fontSize: 11,
+          color: "var(--ink-soft)",
+          lineHeight: 1.4,
+        }}
+      >
+        {slot.helper}
+      </div>
     </div>
   );
 }

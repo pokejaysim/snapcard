@@ -1,16 +1,17 @@
+/**
+ * eBay publish setup card — slab/scanner edition.
+ *
+ * Used in both Onboarding (step 2) and Account (settings page). Loads
+ * `/account/ebay-publish-settings`, lets the user save their eBay seller
+ * defaults (location/postal, business policies, fallback shipping/return
+ * settings), and surfaces a readiness ribbon that drives publishing
+ * elsewhere in the app.
+ *
+ * Behaviour preserved 1:1 — same query/mutation, same form schema, same
+ * fallback-defaults flow. Only the visual layer changed.
+ */
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { apiFetch } from "@/lib/api";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -18,6 +19,15 @@ import {
   RefreshCw,
   Truck,
 } from "lucide-react";
+import {
+  ChipMono,
+  Slab,
+  SlabButton,
+  SlabField,
+  SlabFieldGroup,
+  SlabSelect,
+} from "@/components/slab";
+import { apiFetch } from "@/lib/api";
 import type { EbayPublishSettingsResponse } from "../../../shared/types";
 import {
   CANADA_BETA_MARKETPLACE_ID,
@@ -47,9 +57,6 @@ interface SellerSettingsForm {
   return_shipping_cost_payer: "" | "Buyer" | "Seller";
 }
 
-const SELECT_CLASS_NAME =
-  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
-
 const EMPTY_FORM: SellerSettingsForm = {
   location: "",
   postal_code: "",
@@ -65,8 +72,8 @@ const EMPTY_FORM: SellerSettingsForm = {
 };
 
 export function EbayPublishSetupCard({
-  title = "eBay Publish Setup",
-  description = "Canada beta: save your eBay.ca seller defaults once so SnapCard can publish without asking for shipping and return details every time.",
+  title = "EBAY PUBLISH SETUP",
+  description = "Save your eBay.ca seller defaults once so SnapCard can publish without asking for shipping and return details every time.",
   onStateChange,
 }: EbayPublishSetupCardProps) {
   const queryClient = useQueryClient();
@@ -117,8 +124,7 @@ export function EbayPublishSetupCard({
         settings.return_period_days != null
           ? String(settings.return_period_days)
           : "",
-      return_shipping_cost_payer:
-        settings.return_shipping_cost_payer ?? "",
+      return_shipping_cost_payer: settings.return_shipping_cost_payer ?? "",
     });
   }, [settingsQuery.data?.settings]);
 
@@ -126,10 +132,7 @@ export function EbayPublishSetupCard({
     key: K,
     value: SellerSettingsForm[K],
   ) {
-    setForm((current) => ({
-      ...current,
-      [key]: value,
-    }));
+    setForm((current) => ({ ...current, [key]: value }));
   }
 
   async function handleSave() {
@@ -147,17 +150,13 @@ export function EbayPublishSetupCard({
           return_policy_id: form.return_policy_id || null,
           shipping_service: form.shipping_service || null,
           shipping_cost:
-            form.shipping_cost.trim() === ""
-              ? null
-              : Number(form.shipping_cost),
+            form.shipping_cost.trim() === "" ? null : Number(form.shipping_cost),
           handling_time_days:
             form.handling_time_days.trim() === ""
               ? null
               : Number(form.handling_time_days),
           returns_accepted:
-            form.returns_accepted === ""
-              ? null
-              : form.returns_accepted === "yes",
+            form.returns_accepted === "" ? null : form.returns_accepted === "yes",
           return_period_days:
             form.returns_accepted === "yes" && form.return_period_days
               ? Number(form.return_period_days)
@@ -185,45 +184,71 @@ export function EbayPublishSetupCard({
     }
   }
 
+  // ── Render guards ────────────────────────────────────────
+
   if (settingsQuery.isLoading) {
     return (
-      <Card>
-        <CardContent className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+      <Slab label={title} grade="◉" cert="LOADING">
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: 14,
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            letterSpacing: 1,
+            color: "var(--ink-soft)",
+          }}
+        >
           <Loader2 className="size-4 animate-spin" />
-          Loading your eBay publish settings...
-        </CardContent>
-      </Card>
+          LOADING YOUR EBAY PUBLISH SETTINGS…
+        </div>
+      </Slab>
     );
   }
 
   if (settingsQuery.error) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
-        </CardHeader>
-        <CardContent className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+      <Slab label={title} grade="!" cert="ERROR">
+        <div
+          style={{
+            background: "#c44536",
+            color: "var(--paper)",
+            padding: 12,
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            letterSpacing: 1,
+            border: "2px solid var(--ink)",
+          }}
+        >
+          !{" "}
           {settingsQuery.error instanceof Error
             ? settingsQuery.error.message
             : "Failed to load eBay publish settings."}
-        </CardContent>
-      </Card>
+        </div>
+      </Slab>
     );
   }
 
   if (!settingsQuery.data?.linked) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
-        </CardHeader>
-        <CardContent className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          Connect your eBay account first, then come back here to choose your
-          publishing defaults.
-        </CardContent>
-      </Card>
+      <Slab label={title} grade="?" cert="NOT LINKED">
+        <div
+          style={{
+            border: "1.5px solid #f5a623",
+            background: "rgba(245,166,35,0.08)",
+            padding: 12,
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            letterSpacing: 0.5,
+            color: "var(--ink)",
+            lineHeight: 1.5,
+          }}
+        >
+          ? CONNECT YOUR EBAY ACCOUNT FIRST, THEN COME BACK HERE TO CHOOSE YOUR PUBLISHING DEFAULTS.
+        </div>
+      </Slab>
     );
   }
 
@@ -232,319 +257,463 @@ export function EbayPublishSetupCard({
   const shippingOptions = SNAPCARD_FALLBACK_SHIPPING_OPTIONS[selectedMarketplace];
   const usingFallback = settings.publish_strategy === "snapcard_defaults";
   const returnsAccepted = form.returns_accepted === "yes";
+  const ready = settings.readiness.ready;
 
   return (
-    <Card>
-      <CardHeader className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <CardTitle className="text-base">{title}</CardTitle>
-            <CardDescription>{description}</CardDescription>
-          </div>
-          {settings.readiness.ready ? (
-            <div className="flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-              <CheckCircle2 className="size-3.5" />
-              {usingFallback ? "Ready with SnapCard defaults" : "Ready to publish"}
-            </div>
+    <Slab
+      yellow={ready}
+      label={title}
+      grade={ready ? "✓" : "?"}
+      cert={
+        ready
+          ? usingFallback
+            ? "READY · SNAPCARD DEFAULTS"
+            : "READY · POLICIES"
+          : "SETUP NEEDED"
+      }
+      foot={
+        <>
+          <span>{currentConfig.label.toUpperCase()} BETA</span>
+          <span>{currentConfig.currency} ONLY</span>
+        </>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div
+          style={{
+            fontFamily: "var(--font-marker)",
+            fontSize: 13,
+            color: "var(--ink-soft)",
+            lineHeight: 1.5,
+          }}
+        >
+          {description}
+        </div>
+
+        {/* Status + readiness */}
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          {ready ? (
+            <ChipMono accent>
+              <CheckCircle2 className="size-3" />
+              {usingFallback ? "READY · FALLBACK" : "READY · POLICIES"}
+            </ChipMono>
           ) : (
-            <div className="flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-900">
-              <AlertTriangle className="size-3.5" />
-              Setup needed
-            </div>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "3px 8px",
+                background: "#f5a623",
+                color: "var(--ink)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                letterSpacing: 1,
+                fontWeight: 700,
+                border: "1.5px solid var(--ink)",
+              }}
+            >
+              <AlertTriangle className="size-3" />
+              SETUP NEEDED
+            </span>
           )}
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
+
         {settings.readiness.missing.length > 0 && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-            <p className="font-medium">Finish these once to unlock one-click publish:</p>
-            <ul className="mt-2 space-y-1 pl-5 text-amber-900">
+          <div
+            style={{
+              border: "1.5px solid #f5a623",
+              background: "rgba(245,166,35,0.08)",
+              padding: 12,
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 10,
+                letterSpacing: 1.5,
+                color: "var(--ink)",
+                fontWeight: 700,
+                marginBottom: 6,
+              }}
+            >
+              ? FINISH THESE TO UNLOCK ONE-CLICK PUBLISH
+            </div>
+            <ul
+              style={{
+                margin: 0,
+                padding: "0 0 0 18px",
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                letterSpacing: 0.5,
+                color: "var(--ink-soft)",
+                lineHeight: 1.6,
+              }}
+            >
               {settings.readiness.missing.map((item) => (
-                <li key={item} className="list-disc">
-                  {item}
-                </li>
+                <li key={item}>{item}</li>
               ))}
             </ul>
           </div>
         )}
 
         {saveError && (
-          <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
-            {saveError}
+          <div
+            style={{
+              background: "#c44536",
+              color: "var(--paper)",
+              padding: "8px 12px",
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              letterSpacing: 1,
+              border: "2px solid var(--ink)",
+            }}
+          >
+            ! {saveError}
           </div>
         )}
 
-        <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">
-          <p className="font-medium">{currentConfig.label} beta</p>
-          <p className="mt-1 text-muted-foreground">
+        {/* Beta marketplace banner */}
+        <div
+          style={{
+            border: "1.5px solid var(--ink)",
+            background: "var(--paper-2)",
+            padding: 12,
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              letterSpacing: 1.5,
+              color: "var(--ink)",
+              fontWeight: 700,
+            }}
+          >
+            ★ {currentConfig.label.toUpperCase()} BETA · {currentConfig.currency}
+          </div>
+          <div
+            style={{
+              fontFamily: "var(--font-marker)",
+              fontSize: 13,
+              color: "var(--ink-soft)",
+              marginTop: 4,
+              lineHeight: 1.5,
+            }}
+          >
             SnapCard is proving the Canada workflow first. New beta listings use{" "}
-            {currentConfig.currency}; US and international marketplace support
-            stays hidden until the Canada model is reliable.
-          </p>
+            {currentConfig.currency}; US and international stays hidden until the
+            Canada model is reliable.
+          </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="ebay-location">Seller location</Label>
-            <Input
-              id="ebay-location"
-              value={form.location}
-              onChange={(event) => updateField("location", event.target.value)}
-              placeholder="Vancouver, BC"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ebay-postal-code">Postal code</Label>
-            <Input
-              id="ebay-postal-code"
-              value={form.postal_code}
-              onChange={(event) =>
-                updateField("postal_code", event.target.value.toUpperCase())
-              }
-              placeholder="V5V 1A1"
-            />
-          </div>
+        {/* Location + postal code */}
+        <div className="ep-grid-2">
+          <SlabField
+            id="ebay-location"
+            label="SELLER LOCATION"
+            value={form.location}
+            onChange={(v) => updateField("location", v)}
+            placeholder="Vancouver, BC"
+          />
+          <SlabField
+            id="ebay-postal-code"
+            label="POSTAL CODE"
+            value={form.postal_code}
+            onChange={(v) => updateField("postal_code", v.toUpperCase())}
+            placeholder="V5V 1A1"
+          />
         </div>
 
         {settings.policy_support.message && (
-          <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm text-primary">
-            {settings.policy_support.message}
+          <div
+            style={{
+              border: "1.5px dashed var(--ink)",
+              background: "var(--paper-2)",
+              padding: "8px 12px",
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              letterSpacing: 0.5,
+              color: "var(--ink)",
+              lineHeight: 1.5,
+            }}
+          >
+            ★ {settings.policy_support.message}
           </div>
         )}
 
-        <div className="space-y-4 rounded-lg border p-4">
-          <div>
-            <p className="font-medium">eBay business policies</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Optional in beta. If you select all three policies, SnapCard will
-              use your eBay business policies. If you leave them blank, SnapCard
-              will publish with the fallback defaults below instead.
-            </p>
-          </div>
+        {/* eBay business policies */}
+        <SectionFrame
+          title="EBAY BUSINESS POLICIES"
+          subtitle="Optional in beta. Select all three to use your eBay business policies, or leave blank to use SnapCard's fallback defaults below."
+        >
+          <SlabFieldGroup label="FULFILLMENT POLICY">
+            <SlabSelect
+              id="ebay-fulfillment-policy"
+              value={form.fulfillment_policy_id}
+              onChange={(v) => updateField("fulfillment_policy_id", v)}
+              options={[
+                { value: "", label: "Use SnapCard defaults instead" },
+                ...settings.available_policies.fulfillment.map((p) => ({
+                  value: p.id,
+                  label: p.name,
+                })),
+              ]}
+            />
+          </SlabFieldGroup>
+          <SlabFieldGroup label="PAYMENT POLICY">
+            <SlabSelect
+              id="ebay-payment-policy"
+              value={form.payment_policy_id}
+              onChange={(v) => updateField("payment_policy_id", v)}
+              options={[
+                { value: "", label: "Use SnapCard defaults instead" },
+                ...settings.available_policies.payment.map((p) => ({
+                  value: p.id,
+                  label: p.name,
+                })),
+              ]}
+            />
+          </SlabFieldGroup>
+          <SlabFieldGroup label="RETURN POLICY">
+            <SlabSelect
+              id="ebay-return-policy"
+              value={form.return_policy_id}
+              onChange={(v) => updateField("return_policy_id", v)}
+              options={[
+                { value: "", label: "Use SnapCard defaults instead" },
+                ...settings.available_policies.return.map((p) => ({
+                  value: p.id,
+                  label: p.name,
+                })),
+              ]}
+            />
+          </SlabFieldGroup>
+        </SectionFrame>
 
-          <div className="grid gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="ebay-fulfillment-policy">Fulfillment policy</Label>
-              <select
-                id="ebay-fulfillment-policy"
-                className={SELECT_CLASS_NAME}
-                value={form.fulfillment_policy_id}
-                onChange={(event) =>
-                  updateField("fulfillment_policy_id", event.target.value)
-                }
-                disabled={!settings.policy_support.available}
-              >
-                <option value="">Use SnapCard defaults instead</option>
-                {settings.available_policies.fulfillment.map((policy) => (
-                  <option key={policy.id} value={policy.id}>
-                    {policy.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="ebay-payment-policy">Payment policy</Label>
-              <select
-                id="ebay-payment-policy"
-                className={SELECT_CLASS_NAME}
-                value={form.payment_policy_id}
-                onChange={(event) =>
-                  updateField("payment_policy_id", event.target.value)
-                }
-                disabled={!settings.policy_support.available}
-              >
-                <option value="">Use SnapCard defaults instead</option>
-                {settings.available_policies.payment.map((policy) => (
-                  <option key={policy.id} value={policy.id}>
-                    {policy.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="ebay-return-policy">Return policy</Label>
-              <select
-                id="ebay-return-policy"
-                className={SELECT_CLASS_NAME}
-                value={form.return_policy_id}
-                onChange={(event) =>
-                  updateField("return_policy_id", event.target.value)
-                }
-                disabled={!settings.policy_support.available}
-              >
-                <option value="">Use SnapCard defaults instead</option>
-                {settings.available_policies.return.map((policy) => (
-                  <option key={policy.id} value={policy.id}>
-                    {policy.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-4 rounded-lg border p-4">
-          <div className="flex items-start gap-3">
-            <div className="rounded-full bg-primary/10 p-2 text-primary">
-              <Truck className="size-4" />
-            </div>
-            <div>
-              <p className="font-medium">SnapCard fallback defaults</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Use these beta defaults when you don’t want to depend on eBay
-                business policies. SnapCard will send shipping and return details
-                directly in the Trading API request.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="snapcard-shipping-service">Shipping service</Label>
-              <select
+        {/* Fallback defaults */}
+        <SectionFrame
+          title="SNAPCARD FALLBACK DEFAULTS"
+          subtitle="Use these beta defaults instead of eBay business policies. SnapCard sends shipping and return details directly in the Trading API request."
+          icon={<Truck className="size-4" />}
+        >
+          <div className="ep-grid-2">
+            <SlabFieldGroup label="SHIPPING SERVICE">
+              <SlabSelect
                 id="snapcard-shipping-service"
-                className={SELECT_CLASS_NAME}
                 value={form.shipping_service}
-                onChange={(event) =>
-                  updateField("shipping_service", event.target.value)
-                }
-              >
-                <option value="">Select a shipping service</option>
-                {shippingOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="snapcard-shipping-cost">
-                Shipping cost ({currentConfig.currency})
-              </Label>
-              <Input
-                id="snapcard-shipping-cost"
-                inputMode="decimal"
-                value={form.shipping_cost}
-                onChange={(event) =>
-                  updateField("shipping_cost", event.target.value)
-                }
-                placeholder="0.00"
+                onChange={(v) => updateField("shipping_service", v)}
+                options={[
+                  { value: "", label: "Select a shipping service" },
+                  ...shippingOptions.map((o) => ({
+                    value: o.value,
+                    label: o.label,
+                  })),
+                ]}
               />
-            </div>
+            </SlabFieldGroup>
+            <SlabField
+              id="snapcard-shipping-cost"
+              label={`SHIPPING COST · ${currentConfig.currency}`}
+              inputMode="decimal"
+              value={form.shipping_cost}
+              onChange={(v) => updateField("shipping_cost", v)}
+              placeholder="0.00"
+            />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="snapcard-handling-time">Handling time</Label>
-              <select
+          <div className="ep-grid-2" style={{ marginTop: 12 }}>
+            <SlabFieldGroup label="HANDLING TIME">
+              <SlabSelect
                 id="snapcard-handling-time"
-                className={SELECT_CLASS_NAME}
                 value={form.handling_time_days}
-                onChange={(event) =>
-                  updateField("handling_time_days", event.target.value)
-                }
-              >
-                <option value="">Select handling time</option>
-                {SNAPCARD_FALLBACK_HANDLING_TIME_OPTIONS.map((days) => (
-                  <option key={days} value={String(days)}>
-                    {days} business day{days === 1 ? "" : "s"}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="snapcard-returns-accepted">Returns accepted</Label>
-              <select
+                onChange={(v) => updateField("handling_time_days", v)}
+                options={[
+                  { value: "", label: "Select handling time" },
+                  ...SNAPCARD_FALLBACK_HANDLING_TIME_OPTIONS.map((days) => ({
+                    value: String(days),
+                    label: `${String(days)} business day${days === 1 ? "" : "s"}`,
+                  })),
+                ]}
+              />
+            </SlabFieldGroup>
+            <SlabFieldGroup label="RETURNS ACCEPTED">
+              <SlabSelect
                 id="snapcard-returns-accepted"
-                className={SELECT_CLASS_NAME}
                 value={form.returns_accepted}
-                onChange={(event) =>
+                onChange={(v) =>
                   updateField(
                     "returns_accepted",
-                    event.target.value as SellerSettingsForm["returns_accepted"],
+                    v as SellerSettingsForm["returns_accepted"],
                   )
                 }
-              >
-                <option value="">Choose a return setting</option>
-                <option value="yes">Yes, accept returns</option>
-                <option value="no">No, do not accept returns</option>
-              </select>
-            </div>
+                options={[
+                  { value: "", label: "Choose a return setting" },
+                  { value: "yes", label: "Yes, accept returns" },
+                  { value: "no", label: "No, do not accept returns" },
+                ]}
+              />
+            </SlabFieldGroup>
           </div>
 
           {returnsAccepted && (
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="snapcard-return-window">Return window</Label>
-                <select
+            <div className="ep-grid-2" style={{ marginTop: 12 }}>
+              <SlabFieldGroup label="RETURN WINDOW">
+                <SlabSelect
                   id="snapcard-return-window"
-                  className={SELECT_CLASS_NAME}
                   value={form.return_period_days}
-                  onChange={(event) =>
-                    updateField("return_period_days", event.target.value)
-                  }
-                >
-                  <option value="">Select a return window</option>
-                  {SNAPCARD_FALLBACK_RETURN_DAYS_OPTIONS.map((days) => (
-                    <option key={days} value={String(days)}>
-                      {days} days
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="snapcard-return-payer">
-                  Return shipping paid by
-                </Label>
-                <select
+                  onChange={(v) => updateField("return_period_days", v)}
+                  options={[
+                    { value: "", label: "Select a return window" },
+                    ...SNAPCARD_FALLBACK_RETURN_DAYS_OPTIONS.map((days) => ({
+                      value: String(days),
+                      label: `${String(days)} days`,
+                    })),
+                  ]}
+                />
+              </SlabFieldGroup>
+              <SlabFieldGroup label="RETURN SHIPPING PAID BY">
+                <SlabSelect
                   id="snapcard-return-payer"
-                  className={SELECT_CLASS_NAME}
                   value={form.return_shipping_cost_payer}
-                  onChange={(event) =>
+                  onChange={(v) =>
                     updateField(
                       "return_shipping_cost_payer",
-                      event.target.value as SellerSettingsForm["return_shipping_cost_payer"],
+                      v as SellerSettingsForm["return_shipping_cost_payer"],
                     )
                   }
-                >
-                  <option value="">Select who pays return shipping</option>
-                  <option value="Buyer">Buyer</option>
-                  <option value="Seller">Seller</option>
-                </select>
-              </div>
+                  options={[
+                    { value: "", label: "Select who pays return shipping" },
+                    { value: "Buyer", label: "Buyer" },
+                    { value: "Seller", label: "Seller" },
+                  ]}
+                />
+              </SlabFieldGroup>
             </div>
           )}
-        </div>
+        </SectionFrame>
 
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={handleSave} disabled={saving}>
+        {/* Action buttons */}
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            paddingTop: 14,
+            borderTop: "1.5px dashed var(--ink)",
+            flexWrap: "wrap",
+          }}
+        >
+          <SlabButton primary onClick={handleSave} disabled={saving}>
             {saving ? (
-              <Loader2 className="mr-1.5 size-4 animate-spin" />
+              <Loader2 className="size-4 animate-spin" />
             ) : (
-              <CheckCircle2 className="mr-1.5 size-4" />
+              <CheckCircle2 className="size-4" />
             )}
-            Save eBay defaults
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
+            SAVE EBAY DEFAULTS
+          </SlabButton>
+          <SlabButton
             onClick={() => settingsQuery.refetch()}
             disabled={settingsQuery.isFetching}
           >
             {settingsQuery.isFetching ? (
-              <Loader2 className="mr-1.5 size-4 animate-spin" />
+              <Loader2 className="size-3 animate-spin" />
             ) : (
-              <RefreshCw className="mr-1.5 size-4" />
+              <RefreshCw className="size-3" />
             )}
-            Refresh from eBay
-          </Button>
+            REFRESH FROM EBAY
+          </SlabButton>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      <style>{`
+        .ep-grid-2 {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+        }
+        @media (max-width: 600px) {
+          .ep-grid-2 {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
+    </Slab>
+  );
+}
+
+// ── Helpers ────────────────────────────────────────────────
+
+function SectionFrame({
+  title,
+  subtitle,
+  icon,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        border: "1.5px solid var(--ink)",
+        background: "var(--paper)",
+        padding: 14,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          gap: 10,
+          alignItems: "flex-start",
+          marginBottom: 10,
+        }}
+      >
+        {icon && (
+          <div
+            style={{
+              width: 28,
+              height: 28,
+              background: "var(--ink)",
+              color: "var(--accent)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            {icon}
+          </div>
+        )}
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              letterSpacing: 1.5,
+              fontWeight: 700,
+              color: "var(--ink)",
+            }}
+          >
+            {title}
+          </div>
+          <div
+            style={{
+              fontFamily: "var(--font-marker)",
+              fontSize: 12,
+              color: "var(--ink-soft)",
+              marginTop: 4,
+              lineHeight: 1.5,
+            }}
+          >
+            {subtitle}
+          </div>
+        </div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {children}
+      </div>
+    </div>
   );
 }

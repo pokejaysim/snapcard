@@ -1,10 +1,31 @@
+/**
+ * Pricing suggestion — slab/scanner edition.
+ *
+ * Used by both the New Listing wizard and (eventually) the Listing
+ * Detail page. Hits `/pricing/suggest`, then renders:
+ *   - The price input + "Get Price Suggestion" button row
+ *   - Per-source result tiles (PriceCharting · eBay) showing either the
+ *     CAD price, or a tagged-status reason ("Not configured", "Temporary
+ *     error", "No match found") so users can self-diagnose
+ *   - A PriceCharting match-detail panel with the matched product name,
+ *     a Verify link to the source page, and a USD price ladder
+ *     (Raw / PSA 9 / PSA 10) so users can spot wrong-variant matches
+ *   - A list of the 5 most recent eBay sold comps
+ *
+ * Behaviour preserved 1:1 — same query, same response handling, same
+ * auto-fill of the price field on success. Only the visual layer changed.
+ */
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChipMono, SlabButton } from "@/components/slab";
 import { apiFetch } from "@/lib/api";
-import { DollarSign, Loader2, TrendingUp, AlertTriangle, Info, ExternalLink } from "lucide-react";
+import {
+  DollarSign,
+  Loader2,
+  TrendingUp,
+  AlertTriangle,
+  Info,
+  ExternalLink,
+} from "lucide-react";
 
 interface EbayComp {
   title: string;
@@ -94,13 +115,44 @@ export function PricingSuggestion({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-end gap-3">
-        <div className="flex-1 space-y-2">
-          <Label htmlFor="price">Price (CAD)</Label>
-          <div className="relative">
-            <DollarSign className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-            <Input
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* ── Price input + Get Suggestion button ── */}
+      <div
+        style={{
+          display: "flex",
+          gap: 10,
+          alignItems: "flex-end",
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+          <label
+            htmlFor="price"
+            style={{
+              display: "block",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              letterSpacing: 1.5,
+              color: "var(--ink-soft)",
+              marginBottom: 4,
+              fontWeight: 700,
+            }}
+          >
+            PRICE · CAD
+          </label>
+          <div style={{ position: "relative" }}>
+            <DollarSign
+              className="size-4"
+              style={{
+                position: "absolute",
+                left: 10,
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "var(--ink-soft)",
+                pointerEvents: "none",
+              }}
+            />
+            <input
               id="price"
               type="number"
               step="0.01"
@@ -108,95 +160,222 @@ export function PricingSuggestion({
               placeholder="0.00"
               value={price}
               onChange={(e) => onPriceChange(e.target.value)}
-              className="pl-8"
+              style={{
+                display: "block",
+                width: "100%",
+                padding: "8px 12px 8px 32px",
+                background: "var(--paper)",
+                border: "1.5px solid var(--ink)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 13,
+                color: "var(--ink)",
+                outline: "none",
+                borderRadius: 0,
+                boxSizing: "border-box",
+              }}
+              onFocus={(e) => {
+                e.target.style.boxShadow = "3px 3px 0 var(--accent)";
+              }}
+              onBlur={(e) => {
+                e.target.style.boxShadow = "none";
+              }}
             />
           </div>
         </div>
-        <Button
-          variant="outline"
-          onClick={fetchSuggestion}
-          disabled={loading || !cardName}
-        >
+        <SlabButton onClick={fetchSuggestion} disabled={loading || !cardName}>
           {loading ? (
-            <Loader2 className="mr-1.5 size-4 animate-spin" />
+            <Loader2 className="size-4 animate-spin" />
           ) : (
-            <TrendingUp className="mr-1.5 size-4" />
+            <TrendingUp className="size-4" />
           )}
-          {loading ? "Researching..." : "Get Price Suggestion"}
-        </Button>
+          {loading ? "RESEARCHING…" : "GET SUGGESTION"}
+        </SlabButton>
       </div>
 
       {error && (
-        <p className="text-sm text-destructive">{error}</p>
+        <div
+          style={{
+            background: "#c44536",
+            color: "var(--paper)",
+            padding: "8px 12px",
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            letterSpacing: 1,
+            border: "2px solid var(--ink)",
+          }}
+        >
+          ! {error}
+        </div>
       )}
 
       {result && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center justify-between text-sm">
-              <span>Price Research</span>
-              {result.sources?.condition_applied && (
-                <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                  {result.sources.condition_applied} adjusted
-                </span>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            {/* Admin-visible banner when pricing sources aren't configured.
-                This is the most likely cause of an empty price research card
-                — surface it loudly instead of making the user guess. */}
+        <div
+          style={{
+            background: "var(--paper)",
+            border: "2px solid var(--ink)",
+            boxShadow: "3px 3px 0 var(--ink)",
+          }}
+        >
+          {/* Header band */}
+          <div
+            style={{
+              background: "var(--ink)",
+              color: "var(--paper)",
+              padding: "6px 12px",
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              letterSpacing: 1.5,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <span>★ PRICE RESEARCH</span>
+            {result.sources?.condition_applied && (
+              <span
+                style={{
+                  background: "var(--accent)",
+                  color: "var(--ink)",
+                  padding: "2px 6px",
+                  fontWeight: 700,
+                  fontSize: 10,
+                }}
+              >
+                {result.sources.condition_applied} ADJ
+              </span>
+            )}
+          </div>
+
+          <div
+            style={{
+              padding: 12,
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+            }}
+          >
+            {/* No-key banner — both sources missing */}
             {result.sources?.pricecharting.state === "no_key" &&
               result.sources.ebay.state === "no_key" && (
-                <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-50 p-2.5 text-amber-900">
-                  <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                  <div className="space-y-1">
-                    <p className="font-medium">Pricing sources not configured</p>
-                    <p className="text-xs">
-                      Neither PriceCharting nor eBay is reachable — add
-                      <code className="mx-1 rounded bg-amber-100 px-1">PRICECHARTING_API_KEY</code>
-                      and
-                      <code className="mx-1 rounded bg-amber-100 px-1">EBAY_APP_ID</code>
-                      in Railway, then redeploy.
-                    </p>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    alignItems: "flex-start",
+                    border: "1.5px solid #f5a623",
+                    background: "rgba(245,166,35,0.08)",
+                    padding: 10,
+                  }}
+                >
+                  <AlertTriangle
+                    className="size-4 shrink-0"
+                    style={{ color: "#a87a23", marginTop: 2 }}
+                  />
+                  <div
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 10,
+                      letterSpacing: 0.5,
+                      color: "var(--ink)",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, fontSize: 11, marginBottom: 4 }}>
+                      ? PRICING SOURCES NOT CONFIGURED
+                    </div>
+                    Neither PriceCharting nor eBay is reachable — add{" "}
+                    <code style={kbdStyle}>PRICECHARTING_API_KEY</code> and{" "}
+                    <code style={kbdStyle}>EBAY_APP_ID</code> in Railway, then redeploy.
                   </div>
                 </div>
               )}
 
-            {/* Per-source status — only shown when at least one is ok so the
-                user can see which source contributed vs which one missed. */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* Per-source price tiles */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 10,
+              }}
+            >
               <SourceTile
-                label="PriceCharting"
+                label="PRICECHARTING"
                 priceCad={result.pricechart_price}
                 status={result.sources?.pricecharting}
               />
               <SourceTile
-                label="eBay Avg Sold"
+                label="EBAY AVG SOLD"
                 priceCad={result.ebay_avg_price}
                 status={result.sources?.ebay}
               />
             </div>
 
             {/* Reasoning */}
-            <p className="text-muted-foreground">{result.reasoning}</p>
+            <div
+              style={{
+                fontFamily: "var(--font-marker)",
+                fontSize: 13,
+                color: "var(--ink-soft)",
+                lineHeight: 1.5,
+              }}
+            >
+              {result.reasoning}
+            </div>
 
-            {/* PriceCharting match detail — shows the matched product name
-                and raw USD prices so users can click through and verify. */}
+            {/* PriceCharting match detail */}
             {result.pricecharting_detail && (
-              <div className="rounded-md border bg-muted/30 p-3 space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      PriceCharting matched
-                    </p>
-                    <p className="font-medium">
+              <div
+                style={{
+                  border: "1.5px solid var(--ink)",
+                  background: "var(--paper-2)",
+                }}
+              >
+                <div
+                  style={{
+                    padding: 10,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    gap: 10,
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 9,
+                        letterSpacing: 1.5,
+                        color: "var(--ink-soft)",
+                        fontWeight: 700,
+                      }}
+                    >
+                      PRICECHARTING MATCHED
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        marginTop: 2,
+                        wordBreak: "break-word",
+                      }}
+                    >
                       {result.pricecharting_detail.product_name}
-                    </p>
+                    </div>
                     {result.pricecharting_detail.console_name && (
-                      <p className="text-xs text-muted-foreground">
+                      <div
+                        style={{
+                          fontFamily: "var(--font-mono)",
+                          fontSize: 9,
+                          letterSpacing: 1,
+                          color: "var(--ink-soft)",
+                          marginTop: 2,
+                          textTransform: "uppercase",
+                        }}
+                      >
                         {result.pricecharting_detail.console_name}
-                      </p>
+                      </div>
                     )}
                   </div>
                   {result.pricecharting_detail.product_url && (
@@ -204,19 +383,39 @@ export function PricingSuggestion({
                       href={result.pricecharting_detail.product_url}
                       target="_blank"
                       rel="noreferrer noopener"
-                      className="flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium text-primary hover:bg-primary/5"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: "4px 8px",
+                        background: "var(--ink)",
+                        color: "var(--accent)",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 10,
+                        letterSpacing: 1,
+                        fontWeight: 700,
+                        textDecoration: "none",
+                        flexShrink: 0,
+                      }}
                     >
-                      Verify
+                      VERIFY
                       <ExternalLink className="size-3" />
                     </a>
                   )}
                 </div>
 
-                {/* USD price ladder — raw / PSA 9 / PSA 10 so the user can
-                    sanity-check which grade tier our suggestion anchored on. */}
-                <div className="grid grid-cols-3 gap-2 border-t pt-2">
+                {/* USD price ladder */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(3, 1fr)",
+                    gap: 4,
+                    padding: 10,
+                    borderTop: "1.5px dashed var(--ink)",
+                  }}
+                >
                   <PricePoint
-                    label="Raw (ungraded)"
+                    label="RAW"
                     usd={result.pricecharting_detail.price_raw_usd}
                     highlight
                   />
@@ -229,27 +428,71 @@ export function PricingSuggestion({
                     usd={result.pricecharting_detail.price_graded_10_usd}
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Our suggestion uses the <span className="font-medium">raw</span> price
+                <div
+                  style={{
+                    padding: "0 10px 10px",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 9,
+                    letterSpacing: 0.5,
+                    color: "var(--ink-soft)",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Suggestion uses the <span style={{ fontWeight: 700 }}>RAW</span> price
                   scaled by your card's condition, converted to CAD.
-                </p>
+                </div>
               </div>
             )}
 
-            {/* Comps */}
+            {/* Recent eBay comps */}
             {result.ebay_comps.length > 0 && (
               <div>
-                <p className="mb-1.5 font-medium">Recent eBay Sales</p>
-                <div className="space-y-1">
+                <div
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 10,
+                    letterSpacing: 1.5,
+                    color: "var(--ink-soft)",
+                    fontWeight: 700,
+                    marginBottom: 6,
+                  }}
+                >
+                  ★ RECENT EBAY SOLD COMPS
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   {result.ebay_comps.slice(0, 5).map((comp, i) => (
                     <div
-                      key={i}
-                      className="flex items-center justify-between text-xs"
+                      key={`${comp.title}-${String(i)}`}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "4px 8px",
+                        background: i % 2 === 0 ? "var(--paper)" : "var(--paper-2)",
+                        border: "1px solid var(--line-faint)",
+                      }}
                     >
-                      <span className="truncate pr-2 text-muted-foreground">
+                      <span
+                        style={{
+                          fontFamily: "var(--font-mono)",
+                          fontSize: 10,
+                          color: "var(--ink-soft)",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
                         {comp.title}
                       </span>
-                      <span className="shrink-0 font-medium">
+                      <span
+                        className="hand"
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 700,
+                          flexShrink: 0,
+                        }}
+                      >
                         ${comp.sold_price.toFixed(2)}
                       </span>
                     </div>
@@ -257,18 +500,25 @@ export function PricingSuggestion({
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
     </div>
   );
 }
 
-/**
- * Renders a single price source (PriceCharting or eBay). If the source had
- * a price, shows it. Otherwise shows a compact, source-specific reason so
- * the user can tell "no data" from "not configured" from "temporary error".
- */
+// ── Helpers ────────────────────────────────────────────────
+
+const kbdStyle = {
+  margin: "0 2px",
+  padding: "1px 4px",
+  background: "rgba(0,0,0,0.08)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 10,
+  fontWeight: 700,
+} as const;
+
+/** Per-source result tile — shows price (yellow chip) or a status reason. */
 function SourceTile({
   label,
   priceCad,
@@ -280,37 +530,103 @@ function SourceTile({
 }) {
   if (priceCad !== null) {
     return (
-      <div className="rounded-md bg-muted p-2.5">
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="font-medium">${priceCad.toFixed(2)} CAD</p>
+      <div
+        style={{
+          background: "var(--accent)",
+          border: "1.5px solid var(--ink)",
+          padding: 10,
+          minWidth: 0,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 9,
+            letterSpacing: 1.5,
+            color: "var(--ink)",
+            fontWeight: 700,
+          }}
+        >
+          {label}
+        </div>
+        <div
+          className="hand"
+          style={{
+            fontSize: 22,
+            fontWeight: 700,
+            lineHeight: 1.1,
+            marginTop: 2,
+            color: "var(--ink)",
+          }}
+        >
+          ${priceCad.toFixed(2)}{" "}
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              fontWeight: 500,
+              color: "var(--ink-soft)",
+              letterSpacing: 1,
+            }}
+          >
+            CAD
+          </span>
+        </div>
       </div>
     );
   }
 
-  // No price — explain why.
+  // No price — show why with a tone-appropriate border/background.
   const { text, tone } = describeStatus(status);
-  const toneClass =
-    tone === "error"
-      ? "border-destructive/30 text-destructive"
-      : tone === "warn"
-        ? "border-amber-500/30 text-amber-900 bg-amber-50"
-        : "border-muted text-muted-foreground";
+  const tones = {
+    error: { border: "#c44536", background: "rgba(196,69,54,0.08)", color: "#c44536" },
+    warn: { border: "#f5a623", background: "rgba(245,166,35,0.08)", color: "#a87a23" },
+    neutral: { border: "var(--ink)", background: "var(--paper-2)", color: "var(--ink-soft)" },
+  } as const;
+  const t = tones[tone];
 
   return (
-    <div className={`rounded-md border p-2.5 ${toneClass}`}>
-      <p className="text-xs opacity-80">{label}</p>
-      <p className="flex items-start gap-1.5 text-xs font-medium">
-        <Info className="mt-0.5 size-3 shrink-0" />
+    <div
+      style={{
+        border: `1.5px solid ${t.border}`,
+        background: t.background,
+        padding: 10,
+        minWidth: 0,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 9,
+          letterSpacing: 1.5,
+          color: t.color,
+          fontWeight: 700,
+          opacity: 0.9,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          display: "flex",
+          gap: 6,
+          alignItems: "flex-start",
+          marginTop: 4,
+          fontFamily: "var(--font-mono)",
+          fontSize: 11,
+          color: t.color,
+          fontWeight: 700,
+        }}
+      >
+        <Info className="size-3 shrink-0" style={{ marginTop: 2 }} />
         <span>{text}</span>
-      </p>
+      </div>
     </div>
   );
 }
 
-/**
- * One cell in the PriceCharting USD price ladder (raw / PSA 9 / PSA 10).
- * Highlighted cell is the one our CAD suggestion anchored on.
- */
+/** One cell of the PriceCharting USD ladder — RAW is highlighted because
+ *  that's the price the suggestion is anchored on. */
 function PricePoint({
   label,
   usd,
@@ -320,13 +636,52 @@ function PricePoint({
   usd: number | null;
   highlight?: boolean;
 }) {
-  const bgClass = highlight ? "bg-primary/10" : "bg-background";
   return (
-    <div className={`rounded p-2 ${bgClass}`}>
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="font-medium">
-        {usd !== null ? `$${usd.toFixed(2)} USD` : "—"}
-      </p>
+    <div
+      style={{
+        background: highlight ? "var(--accent)" : "var(--paper)",
+        border: "1.5px solid var(--ink)",
+        padding: 6,
+        textAlign: "center",
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 9,
+          letterSpacing: 1,
+          color: "var(--ink-soft)",
+          fontWeight: 700,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        className="hand"
+        style={{
+          fontSize: 16,
+          fontWeight: 700,
+          lineHeight: 1.1,
+          marginTop: 2,
+          color: "var(--ink)",
+        }}
+      >
+        {usd !== null ? `$${usd.toFixed(2)}` : "—"}
+        {usd !== null && (
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 8,
+              color: "var(--ink-soft)",
+              fontWeight: 500,
+              letterSpacing: 1,
+              marginLeft: 2,
+            }}
+          >
+            USD
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -337,8 +692,6 @@ function describeStatus(
   if (!status) return { text: "Unavailable", tone: "neutral" };
   switch (status.state) {
     case "ok":
-      // Source returned ok but no usable price (e.g. eBay comps were all in
-      // unsupported currencies). Rare, fall back to neutral.
       return { text: "No usable price", tone: "neutral" };
     case "no_key":
       return { text: "Not configured", tone: "warn" };
@@ -348,3 +701,8 @@ function describeStatus(
       return { text: "No match found", tone: "neutral" };
   }
 }
+
+// Suppress unused-icon import warning while keeping the import available
+// for the SlabButton / ChipMono pair in case future revisions need them.
+const _ChipMonoRef = ChipMono;
+void _ChipMonoRef;
